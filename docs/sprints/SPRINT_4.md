@@ -1,134 +1,743 @@
-# Sprint 4 — Usługa, stan i pierwszy kontener
+# Sprint 4 — API, persistence i pierwszy kontener
 
-**Daty:** 26.11.2026 – 17.12.2026 · **Spotkania:** 26.11 (start sprintu), 03.12 i 10.12 (pełne), 17.12 (zamknięcie sprintu i start Sprintu 5) · **Deadline:** stan gałęzi `main` na początku zajęć 17.12.2026
+**Daty:** 26.11.2026 – 17.12.2026
+**Spotkania:** 26.11 (start Sprintu 4), 03.12, 10.12 oraz 17.12 (zamknięcie Sprintu 4 i start Sprintu 5)
+**Deadline:** stan gałęzi `main` na początku zajęć 17.12.2026
 
-## Cel
+## Co zrobicie w tym sprincie
 
-Model jest dostępny przez usługę z walidowanym kontraktem i prostym tokenem dostępu, zapisuje
-predykcje przez konfigurowalne persistence i działa w kontenerze.
+Macie już wybrany i zapisany model produkcyjny.
 
-## Pytanie architektoniczne
+W tym sprincie udostępnicie go przez **FastAPI**, tak aby inny program mógł wysłać dane wejściowe
+i otrzymać predykcję.
 
-Jaki jest kontrakt między modelem a światem i gdzie trzymamy stan?
+Dodatkowo:
 
-## Co powinniście rozumieć po tym sprincie
+- dodacie walidację wejścia i odpowiedzi;
+- zabezpieczycie endpoint predykcji prostym tokenem `API_KEY`;
+- zapiszecie wykonane predykcje przez warstwę persistence;
+- uruchomicie API w Dockerze;
+- przygotujecie pierwszy wspólny smoke test.
 
-- Walidacja na granicy usługi i semantyka błędów 4xx/5xx.
-- Model ładowany raz.
-- Na wejściu usługi działa input normalization; model preprocessing jest wewnątrz modelu.
-- Różnica między sekretem a zwykłą konfiguracją.
-- Stan poza procesem i jawne tryby persistence.
-- Wstrzykiwanie zależności w testach; obraz kontenera jako artefakt.
+Na koniec sprintu model ma działać jako usługa uruchomiona w kontenerze.
 
-## CORE
+---
 
-Kontrakt (start 26.11):
+## Najważniejsza idea Sprintu 4
 
-- [ ] `/healthz` zwraca status, wersję modelu i tryb persistence.
-- [ ] `/predict` ze schematem Pydantic zespołu; odpowiedź: etykieta, prawdopodobieństwo klasy
-  pozytywnej, wersja modelu.
-- [ ] Model wczytywany raz; input normalization na wejściu.
+Do tej pory model był elementem pipeline'u ML.
 
-Stan i konfiguracja (03.12):
+Teraz staje się częścią aplikacji.
 
-- [ ] Warstwa persistence (repository) z trybami `sql` i `disabled`.
-- [ ] Model tabeli predykcji w SQLAlchemy (bez ręcznego DDL); SQLite w pliku poza obrazem.
-- [ ] Ustawienia przez pydantic-settings z `env_file`; `.env.example` bez prawdziwego sekretu.
-- [ ] Prosty token dostępu do usługi (service API key, `API_KEY`): nagłówek wymagany przez
-  `/predict`; `/healthz` pozostaje otwarte. To nie jest uwierzytelnianie użytkowników.
-- [ ] Jedna linia logu JSON na każdą predykcję.
-- [ ] Testy: błąd walidacji 422, brak lub zły token 401, zapis przez repository na tymczasowej
-  bazie, tryb `disabled`.
+W tym sprincie odpowiadacie na pytania:
 
-Kontener (10.12):
+> Jak wygląda kontrakt między modelem a światem zewnętrznym?
 
-- [ ] Dockerfile API: bez condy, wersje bibliotek modelu takie jak w treningu, port z `$PORT`,
-  `.dockerignore`.
-- [ ] Decyzja, jak model trafia do usługi i obrazu — szkic ADR-3.
-- [ ] Wolumen na plik SQLite; test z limitem pamięci (`--memory`).
-- [ ] Pierwsza wersja wspólnego skryptu smoke (używanego do Sprintu 6).
+oraz:
 
-Pre-flight GCP (do 17.12) — patrz niżej.
+> Gdzie zapisujemy stan systemu?
+
+---
+
+## Co nowego pojawia się w tym sprincie
+
+### API
+
+API pozwala innym programom korzystać z modelu bez znajomości kodu treningowego.
+
+W tym kursie tworzycie dwa podstawowe endpointy:
+
+```text
+GET /healthz
+POST /predict
+```
+
+`/healthz` służy do sprawdzenia, czy usługa działa.
+
+`/predict` przyjmuje dane wejściowe i zwraca predykcję.
+
+---
+
+### Kontrakt API
+
+Kontrakt API określa:
+
+- jakie dane można wysłać do `/predict`;
+- które pola są wymagane;
+- jakie mają typy;
+- jak wygląda odpowiedź;
+- jakie błędy może zwrócić usługa.
+
+Schemat wejścia i odpowiedzi definiujecie przez Pydantic.
+
+Odpowiedź `/predict` powinna zawierać co najmniej:
+
+- etykietę predykcji;
+- prawdopodobieństwo klasy pozytywnej;
+- wersję modelu.
+
+---
+
+### Walidacja na granicy usługi
+
+API jest granicą między waszym systemem a światem zewnętrznym.
+
+Nie zakładamy, że każdy request jest poprawny.
+
+Pydantic sprawdza strukturę wejścia przed wykonaniem predykcji.
+
+Przykład:
+
+- błędny typ danych;
+- brak wymaganego pola;
+- niepoprawna wartość.
+
+W takich przypadkach klient powinien dostać poprawny błąd 4xx zamiast błędu wewnętrznego 5xx.
+
+---
+
+### Model ładowany raz
+
+Model nie powinien być ładowany z dysku przy każdym requestcie.
+
+Powinien zostać wczytany raz podczas uruchamiania usługi i później być używany do kolejnych
+predykcji.
+
+To ogranicza czas odpowiedzi i zużycie zasobów.
+
+---
+
+### Input normalization i model preprocessing w API
+
+Zasady z wcześniejszych sprintów nadal obowiązują.
+
+Przed przekazaniem rekordu do modelu API wykonuje:
+
+```text
+input normalization
+```
+
+Natomiast:
+
+```text
+model preprocessing
+```
+
+pozostaje częścią zapisanego modelu/sklearn `Pipeline`.
+
+API nie powinno ponownie implementować skalowania, imputacji ani kodowania kategorii.
+
+---
+
+### Persistence
+
+Persistence oznacza zapis stanu poza bieżącym requestem.
+
+W tym sprincie zapisujecie informacje o wykonanych predykcjach.
+
+Warstwa persistence ma dwa tryby:
+
+```text
+sql
+disabled
+```
+
+`sql` oznacza zapis do bazy danych.
+
+`disabled` oznacza, że predykcje działają bez zapisywania stanu.
+
+Ten sam kod API powinien działać w obu trybach.
+
+---
+
+### Repository
+
+Nie zapisujemy rekordów do bazy bezpośrednio w endpointzie.
+
+Tworzymy warstwę repository, która odpowiada za zapis danych.
+
+Dzięki temu endpoint:
+
+- przyjmuje request;
+- wykonuje predykcję;
+- przekazuje dane do repository.
+
+Nie musi znać szczegółów SQL.
+
+To ułatwia również testowanie.
+
+---
+
+### SQLite
+
+W Sprincie 4 używamy SQLite jako prostej lokalnej bazy.
+
+Model tabeli definiujecie w SQLAlchemy.
+
+Nie tworzycie tabel ręcznie przez SQL DDL.
+
+Plik SQLite ma znajdować się poza obrazem kontenera i być podłączony przez wolumen.
+
+W Sprincie 5 ten sam kontrakt persistence zostanie użyty z PostgreSQL.
+
+---
+
+### Konfiguracja i sekret
+
+Nie wpisujemy ustawień na stałe do kodu.
+
+Konfiguracja jest pobierana ze zmiennych środowiskowych przez `pydantic-settings`.
+
+Przykładowe ustawienia:
+
+- `DATABASE_URL`;
+- tryb persistence;
+- adres modelu;
+- `API_KEY`.
+
+Lokalnie wartości mogą znajdować się w `.env`.
+
+Do repozytorium trafia tylko:
+
+```text
+.env.example
+```
+
+bez prawdziwych sekretów.
+
+---
+
+### `API_KEY`
+
+`API_KEY` jest prostym tokenem chroniącym endpoint `/predict`.
+
+To **nie jest system logowania użytkowników**.
+
+W tym kursie chodzi tylko o pokazanie, że sekret:
+
+- nie powinien być hardcodowany w kodzie;
+- nie powinien trafić do Git;
+- powinien być dostarczany przez konfigurację.
+
+`/healthz` pozostaje dostępne bez tokenu.
+
+---
+
+### Logi
+
+Każda predykcja powinna wygenerować jedną linię logu JSON.
+
+Log ma być ustrukturyzowany, żeby później dało się go łatwo przeglądać w Cloud Logging.
+
+Nie logujcie sekretów.
+
+---
+
+### Docker
+
+Na koniec sprintu API uruchamiacie w kontenerze.
+
+Dockerfile powinien zawierać tylko to, czego potrzebuje usługa.
+
+W obrazie API nie używamy Condy.
+
+Wersje bibliotek potrzebnych do wczytania modelu muszą być zgodne z tymi, z których korzystał
+model podczas treningu.
+
+---
+
+## Co macie zrobić
+
+### Krok 1. Przygotujcie strukturę API
+
+Rozwijajcie scaffold:
+
+```text
+src/asi_project/api/
+tests/api/
+```
+
+Nie twórzcie drugiej, równoległej aplikacji poza przygotowaną strukturą.
+
+---
+
+### Krok 2. Zaimplementujcie `/healthz`
+
+Endpoint:
+
+```text
+GET /healthz
+```
+
+powinien zwracać co najmniej:
+
+- status usługi;
+- wersję modelu;
+- aktualny tryb persistence.
+
+Przykładowa odpowiedź może mieć postać:
+
+```json
+{
+  "status": "ok",
+  "model_version": "...",
+  "persistence": "sql"
+}
+```
+
+Dokładny format może wynikać ze scaffoldingu projektu.
+
+---
+
+### Krok 3. Zdefiniujcie schemat wejścia `/predict`
+
+Przygotujcie model Pydantic odpowiadający cechom wymaganym przez wasz model.
+
+Schemat musi być zgodny z kontraktem danych z wcześniejszych sprintów.
+
+Nie dodawajcie EXCLUDED FEATURES tylko dlatego, że znajdują się w oryginalnym CSV.
+
+---
+
+### Krok 4. Zaimplementujcie `/predict`
+
+Endpoint:
+
+```text
+POST /predict
+```
+
+powinien wykonywać:
+
+```text
+walidacja requestu
+→ input normalization
+→ model.predict()
+→ model.predict_proba()
+→ przygotowanie odpowiedzi
+→ opcjonalny zapis przez repository
+```
+
+Odpowiedź powinna zawierać:
+
+- etykietę;
+- prawdopodobieństwo klasy pozytywnej;
+- wersję modelu.
+
+---
+
+### Krok 5. Ładujcie model tylko raz
+
+Model produkcyjny ze Sprintu 3 powinien zostać wczytany podczas uruchamiania aplikacji.
+
+Nie ładujcie artefaktu ponownie wewnątrz każdego requestu.
+
+Sprawdźcie również, że API korzysta z tej samej funkcji wczytywania modelu, która była używana
+w smoke teście Sprintu 3.
+
+---
+
+### Krok 6. Dodajcie konfigurację przez `pydantic-settings`
+
+Przygotujcie ustawienia aplikacji pobierane ze zmiennych środowiskowych.
+
+Lokalnie można używać:
+
+```text
+.env
+```
+
+Do repozytorium dodajcie:
+
+```text
+.env.example
+```
+
+z nazwami zmiennych, ale bez prawdziwych sekretów.
+
+---
+
+### Krok 7. Dodajcie `API_KEY`
+
+`/predict` ma wymagać poprawnego tokenu.
+
+Token przekazujcie w nagłówku zgodnie z kontraktem projektu.
+
+Oczekiwane zachowanie:
+
+```text
+poprawny token → predykcja
+brak tokenu → 401
+błędny token → 401
+```
+
+`/healthz` pozostaje otwarte.
+
+---
+
+### Krok 8. Zbudujcie warstwę persistence
+
+Przygotujcie repository z dwoma trybami:
+
+```text
+sql
+disabled
+```
+
+W trybie `sql` każda poprawna predykcja powinna zostać zapisana.
+
+W trybie `disabled` predykcja działa normalnie, ale nic nie jest zapisywane.
+
+Endpoint `/predict` nie powinien zawierać szczegółowej logiki SQL.
+
+---
+
+### Krok 9. Dodajcie SQLite przez SQLAlchemy
+
+W trybie `sql` użyjcie SQLite.
+
+Model tabeli predykcji zdefiniujcie w SQLAlchemy.
+
+Rekord powinien przechowywać co najmniej informacje potrzebne do identyfikacji wykonanej
+predykcji, np.:
+
+- timestamp;
+- payload wejściowy;
+- wynik;
+- wersję modelu.
+
+Dokładny schemat ustalcie jako zespół zgodnie ze scaffoldem.
+
+Plik SQLite nie może być zapisany wewnątrz obrazu jako trwałe miejsce danych.
+
+---
+
+### Krok 10. Dodajcie logowanie JSON
+
+Każda wykonana predykcja powinna tworzyć jedną linię logu JSON.
+
+Log powinien zawierać informacje techniczne potrzebne do obserwacji działania usługi.
+
+Nie logujcie:
+
+- `API_KEY`;
+- haseł;
+- innych sekretów.
+
+---
+
+### Krok 11. Dodajcie testy API
+
+Uzupełnijcie:
+
+```text
+tests/api/
+```
+
+Testy powinny obejmować co najmniej:
+
+- poprawny request;
+- błędny request zwracający 422;
+- brak tokenu zwracający 401;
+- zły token zwracający 401;
+- zapis przez repository do tymczasowej bazy;
+- działanie trybu `disabled`.
+
+W testach nie musicie używać prawdziwej produkcyjnej bazy.
+
+---
+
+### Krok 12. Przygotujcie Dockerfile API
+
+Rozwijajcie:
+
+```text
+docker/api.Dockerfile
+```
+
+Dockerfile powinien:
+
+- uruchamiać FastAPI;
+- nie używać Condy;
+- korzystać z portu przekazanego przez `$PORT`;
+- zawierać biblioteki potrzebne do wczytania modelu;
+- być zgodny z `.dockerignore`.
+
+Zbudujcie obraz i uruchomcie go lokalnie.
+
+---
+
+### Krok 13. Podłączcie SQLite przez wolumen
+
+Jeśli API działa w trybie `sql`, plik SQLite powinien być zapisany na wolumenie.
+
+Dzięki temu usunięcie i ponowne uruchomienie kontenera nie musi usuwać bazy.
+
+To jest rozwiązanie lokalne dla Sprintu 4.
+
+Nie traktujemy SQLite jako docelowej bazy dla Cloud Run.
+
+---
+
+### Krok 14. Sprawdźcie limit pamięci
+
+Uruchomcie kontener z limitem pamięci przez:
+
+```text
+--memory
+```
+
+Celem jest sprawdzenie, ile pamięci potrzebuje usługa z wczytanym modelem.
+
+Ten wynik przyda się później przy konfiguracji Cloud Run.
+
+---
+
+### Krok 15. Przygotujcie wspólny smoke test
+
+Od tego sprintu do końca kursu używacie jednego skryptu smoke dla API.
+
+Smoke powinien sprawdzić:
+
+1. `/healthz`;
+2. tryb persistence;
+3. `/predict` z poprawnym tokenem;
+4. schemat odpowiedzi;
+5. zapis rekordu, jeśli persistence = `sql`.
+
+Jeśli persistence = `disabled`, brak zapisu jest poprawnym zachowaniem.
+
+W Sprincie 4 smoke uruchamiacie na lokalnym kontenerze w trybie `sql`.
+
+---
+
+### Krok 16. Przygotujcie szkic ADR-3
+
+ADR-3 będzie rozwijany aż do Sprintu 6.
+
+W tym sprincie zapisujecie pierwszą decyzję:
+
+> Jak model trafia do usługi i obrazu?
+
+Nie musicie jeszcze finalizować decyzji dotyczących całej architektury chmurowej.
+
+To jest tylko pierwsza wersja ADR-3.
+
+Plik trafia do:
+
+```text
+docs/adr/
+```
+
+---
+
+## Co musi być gotowe na koniec Sprintu 4
+
+- [ ] `/healthz` działa i zwraca status, wersję modelu i tryb persistence.
+- [ ] `/predict` ma schemat Pydantic zgodny z kontraktem modelu.
+- [ ] `/predict` zwraca etykietę, prawdopodobieństwo klasy pozytywnej i wersję modelu.
+- [ ] Model jest ładowany raz przy starcie aplikacji.
+- [ ] API wykonuje input normalization przed modelem.
+- [ ] Model preprocessing pozostaje wewnątrz zapisanego modelu.
+- [ ] Konfiguracja działa przez `pydantic-settings`.
+- [ ] `.env.example` znajduje się w repozytorium i nie zawiera sekretów.
+- [ ] `/predict` wymaga poprawnego `API_KEY`.
+- [ ] Brak lub zły token zwraca 401.
+- [ ] `/healthz` nie wymaga tokenu.
+- [ ] Repository obsługuje tryby `sql` i `disabled`.
+- [ ] SQLite działa przez SQLAlchemy.
+- [ ] Predykcje są zapisywane w trybie `sql`.
+- [ ] Każda predykcja generuje log JSON.
+- [ ] Testy API przechodzą.
+- [ ] Dockerfile API działa lokalnie.
+- [ ] Port usługi jest pobierany z `$PORT`.
+- [ ] SQLite jest podłączone przez wolumen.
+- [ ] Kontener został sprawdzony z limitem pamięci.
+- [ ] Wspólny smoke test API przechodzi.
+- [ ] Szkic ADR-3 jest zmergowany.
+- [ ] W repozytorium nie ma sekretów.
+- [ ] CI na `main` jest zielone.
+- [ ] Każda osoba w zespole ma własny obszar pracy i zrobiła merytoryczne review pracy innej osoby.
+
+---
+
+## Jak sprawdzić, że Sprint 4 jest gotowy
+
+Uruchomcie API w kontenerze w trybie:
+
+```text
+persistence = sql
+```
+
+z lokalnym `.env`.
+
+Następnie wykonajcie smoke test.
+
+Oczekiwany przebieg:
+
+```text
+docker run
+→ /healthz
+→ persistence = sql
+→ /predict z poprawnym API_KEY
+→ poprawna odpowiedź
+→ rekord zapisany w SQLite
+```
+
+Dodatkowo sprawdźcie ręcznie:
+
+```text
+/predict bez tokenu → 401
+/predict ze złym tokenem → 401
+```
+
+Uruchomcie również:
+
+```bash
+pytest
+pre-commit run --all-files
+```
+
+---
+
+## Pre-flight GCP
+
+Do końca Sprintu 4 zespół ma sprawdzić, czy dostęp do GCP działa.
+
+Zakres pre-flightu zależy od wyniku testów przeprowadzonych wcześniej przez prowadzącą.
+
+Sprawdźcie instrukcję:
+
+```text
+docs/GCP_CREDENTIALS_PREFLIGHT.md
+```
+
+Minimum:
+
+- działające student credentials;
+- dostęp do projektu GCP;
+- billing lub kredyty, jeśli są wymagane;
+- wymagane API są włączone;
+- dostęp do Artifact Registry;
+- prosty test techniczny.
+
+Rola Viewer dla prowadzącej jest warunkowa.
+
+Jej brak nie blokuje zaliczenia sprintu, jeśli uprawnienia studenckie nie pozwalają na jej
+dodanie.
+
+---
+
+## Przygotowanie do Sprintu 5
+
+Każda osoba powinna sprawdzić:
+
+```bash
+docker compose version
+```
+
+W Sprincie 5 połączycie:
+
+```text
+API + UI + Postgres
+```
+
+w jeden lokalny system uruchamiany przez Docker Compose.
+
+---
+
+## Podział pracy w zespole
+
+Przykładowe obszary odpowiedzialności:
+
+- kontrakt API i schematy Pydantic;
+- wczytywanie modelu i endpoint `/predict`;
+- persistence i SQLite;
+- konfiguracja i `API_KEY`;
+- testy API;
+- Dockerfile i test pamięci;
+- smoke test;
+- szkic ADR-3.
+
+Nie musicie dzielić pracy dokładnie w ten sposób.
+
+Każda osoba:
+
+- ma co najmniej jeden własny obszar pracy;
+- robi merytoryczne review przynajmniej jednego PR innej osoby.
+
+Integrator Sprintu 4 pilnuje:
+
+- kompletności checklisty;
+- smoke testu;
+- braku sekretów w repozytorium;
+- wykonania pre-flightu GCP.
+
+---
 
 ## OPTIONAL
 
-- `GET /predictions`.
-- Alembic.
-- Budowanie obrazu w CI.
+Jeśli zespół skończy zakres obowiązkowy wcześniej, może dodatkowo:
 
-## Miejsce w repozytorium
+- dodać endpoint `GET /predictions`;
+- dodać Alembic do migracji bazy;
+- budować obraz API w CI.
 
-Scaffold przygotowany od startu Sprintu 1 (README w katalogach):
+Elementy OPTIONAL nie są wymagane do zaliczenia Sprintu 4.
 
-- `src/asi_project/api/` — usługa, schematy, ustawienia, repository
-- `tests/api/` — testy API
-- `docker/api.Dockerfile`, `.dockerignore`, `.env.example` — kontener API
-- wspólny skrypt smoke — kontrakt opisany w `scripts/README.md`
-- `docs/adr/` — szkic ADR-3
+---
 
-## Wymagane artefakty
+## Najczęstsze błędy w tym sprincie
 
-Kod usługi API · repository · testy API · Dockerfile API · `.env.example` · skrypt smoke ·
-sekcje README: API, konfiguracja, persistence · szkic ADR-3.
+### 1. Ładowanie modelu przy każdym requestcie
 
-## Definition of Done
+Model powinien zostać wczytany raz przy starcie aplikacji.
 
-- `docker run` z `.env` → smoke zielony w trybie `sql`: `/healthz` raportuje `sql`,
-  `/predict` z tokenem zwraca poprawny kontrakt, rekord jest zapisany w SQLite na wolumenie.
-- `/predict` bez tokenu zwraca 401.
-- Testy API przechodzą w CI.
-- W repozytorium nie ma sekretów.
-- Pre-flight GCP zespołu jest wykonany.
-- Szkic ADR-3 jest zmergowany.
+---
 
-## CI
+### 2. Powtarzanie preprocessing w API
 
-Dochodzą testy API bez prawdziwego modelu i bez prawdziwej bazy.
+API wykonuje input normalization.
 
-## Smoke test / pre-flight
+Skalowanie, imputacja i kodowanie wymagające `fit()` pozostają wewnątrz modelu.
 
-Automatyczny smoke (jeden skrypt od Sprintu 4 do Sprintu 6, wyłącznie warstwa API):
+---
 
-1. `/healthz`;
-2. odczyt trybu persistence;
-3. `/predict` z tokenem;
-4. kontrakt odpowiedzi: etykieta, prawdopodobieństwo klasy pozytywnej, wersja modelu;
-5. tryb `sql`: rekord zapisany w bazie wskazanej przez tę samą konfigurację co usługa;
-   tryb `disabled`: brak wymogu zapisu.
+### 3. SQL bezpośrednio w endpointzie
 
-W Sprincie 4 smoke działa na kontenerze w trybie `sql`.
+Endpoint nie powinien sam wykonywać szczegółowych operacji bazodanowych.
 
-Pre-flight GCP zespołu (wchodzi do DoD): dostęp na student credentials, działający projekt,
-billing lub kredyty (jeśli są wymagane), włączone API, Artifact Registry i prosty test
-techniczny. Rola Viewer dla prowadzącej jest warunkowa: wykorzystujemy ją tylko wtedy, gdy
-pozwalają na to uprawnienia; jej brak nie wpływa na zaliczenie. Zakres zależy od wyniku
-pre-flightu prowadzącej (`docs/GCP_CREDENTIALS_PREFLIGHT.md`).
+Od tego jest repository.
 
-Pre-flight gotowości do Sprintu 5: `docker compose version`.
+---
 
-## Decyzja zespołu
+### 4. Sekret zapisany w kodzie lub repozytorium
 
-Kontrakt API, schemat rekordu predykcji, co jest sekretem, jak model trafia do usługi i obrazu.
+`API_KEY` nie może znaleźć się:
 
-## ADR
+- w kodzie;
+- w commitowanym `.env`;
+- w Dockerfile.
 
-**ADR-3 — szkic:** jak model trafia do usługi i obrazu.
+Do repo trafia tylko `.env.example` bez prawdziwej wartości.
 
-## Indywidualna odpowiedzialność
+---
 
-Owned items, np.: kontrakt / persistence / testy i token / Docker i szkic ADR-3.
-Merytoryczne review, rotacyjny integrator, krótki checkpoint ustny.
+### 5. Traktowanie SQLite jako docelowej bazy chmurowej
 
-## Poziom wsparcia
+SQLite jest lokalnym rozwiązaniem Sprintu 4.
 
-Średnio-niski: demo na starcie sprintu; zespół najpierw projektuje kontrakt i schemat,
-PR referencyjny pojawia się dopiero po pierwszym spotkaniu.
+W Sprincie 5 przejdziecie lokalnie na Postgresa, a w Cloud Run domyślnie będziecie mogli
+uruchomić system bez persistence.
 
-## Co musi być gotowe przed Sprintem 5
+---
 
-Obraz API, skrypt smoke, `.env.example`, działający projekt GCP, szkic ADR-3.
+## Najważniejszy rezultat Sprintu 4
 
-## Największe ryzyko
+Po tym sprincie powinniście móc odpowiedzieć:
 
-Najwięcej nowych elementów w jednym sprincie — jedna rzecz na spotkanie. Problemy z kredytami
-i uprawnieniami GCP — pre-flight przed świętami, gdy jest jeszcze wsparcie.
+> Czy możemy uruchomić kontener z naszym API, wysłać poprawny request i otrzymać predykcję,
+> a w trybie `sql` również zapisać jej wynik?
+
+Jeżeli odpowiedź brzmi „tak”, model przestał być tylko artefaktem ML i stał się działającą
+usługą.

@@ -1,163 +1,464 @@
 # Sprint 1 — Problem, dane i poprawny baseline
 
-**Daty:** 15.10.2026 – 29.10.2026 · **Spotkania:** 15.10, 22.10 (pełne), 29.10 (zamknięcie sprintu i start Sprintu 2) · **Deadline:** stan gałęzi `main` na początku zajęć 29.10.2026
+**Daty:** 15.10.2026 – 29.10.2026
+**Spotkania:** 15.10, 22.10 oraz 29.10 (zamknięcie Sprintu 1 i start Sprintu 2)
+**Deadline:** stan gałęzi `main` na początku zajęć 29.10.2026
 
-## Cel
+## Co zrobicie w tym sprincie
 
-Zespół ma kontrakt danych, inference-safe input normalization i poprawny baseline w repozytorium
-z działającym CI.
+W pierwszym sprincie wybierzecie dataset dla projektu zespołowego, poznacie jego strukturę
+i przygotujecie pierwszy poprawny eksperyment ML.
 
-## Pytanie architektoniczne
+Na koniec sprintu repozytorium ma zawierać:
 
-Co jest kontraktem danych naszego systemu i skąd wiemy, że eksperyment jest poprawny?
+- opis wybranego problemu i danych;
+- zasady korzystania z danych;
+- EDA;
+- prosty baseline;
+- pierwszy model w sklearn `Pipeline`;
+- metryki;
+- diagram docelowego systemu;
+- działające testy i CI.
 
-## Co powinniście rozumieć po tym sprincie
+W tym sprincie **nie używamy jeszcze Kedro, W&B ani AutoGluona**.
 
-- Czym jest kontrakt danych i kto za jaką jego część odpowiada (prowadząca: target, klasa
-  pozytywna, ALLOWED / EXCLUDED FEATURES; zespół: typy cech i reguły input normalization).
-- Czym różnią się trzy typy przetwarzania:
-  - **input normalization** — działa na pojedynczym rekordzie, bez targetu i statystyk zbioru;
-    ta sama funkcja trafi później do API;
-  - **training-only filtering** — tylko przy przygotowaniu danych treningowych
-    (np. rekordy bez targetu, duplikaty), nigdy przy predykcji;
-  - **model preprocessing** — wszystko, co wymaga `fit` (imputacja, skalowanie, kodowanie);
-    żyje wewnątrz sklearn Pipeline.
-- Dlaczego split train/test musi poprzedzać `fit` i czym grozi leakage.
-- Po co baseline (DummyClassifier) i dlaczego sama accuracy często nie wystarcza.
-- Dlaczego pełne dane są poza gitem, a w repo jest tylko mała próbka do CI.
-- Jak review i CI działają jako bramka jakości.
+---
 
-## CORE
+## Najważniejsza idea Sprintu 1
 
-- [ ] Repozytorium zespołu z zasadą review (PR przegląda osoba inna niż autor) i tablicą
-  sprintu z ownerami.
-- [ ] Dataset z listy w `docs/datasets.md`, wpisany w `project.yaml` (pole `dataset`).
-- [ ] Karta projektu w README: dataset, źródło i licencja (z cytowaniem), data pobrania,
-  odcisk SHA-256 pliku, informacja o danych osobowych, target i klasa pozytywna, metryka główna
-  z uzasadnieniem, użytkownik systemu i decyzja, którą wspiera model.
-- [ ] Pełne dane pobrane skryptem `scripts/download_data.py` (poza gitem) i próbka CI
-  `data/01_raw/sample.csv` w repozytorium (`scripts/make_ci_sample.py`).
-- [ ] Kontrakt danych jako kod: `validate()` przechodzi na próbce, typy cech zadeklarowane
-  w `project.yaml`, target binarny z jawnie wskazaną klasą pozytywną.
-- [ ] Input normalization w `normalize_input()` (`src/asi_project/data.py`) — reguły dla
-  waszego datasetu, testy inference-safe przechodzą.
-- [ ] Training-only filtering w `filter_training_rows()` — tylko jeśli dataset tego wymaga;
-  decyzja opisana w notebooku 01.
-- [ ] EDA w `notebooks/01_eda.ipynb` z obserwacjami i decyzjami.
-- [ ] Baseline w `notebooks/02_baseline.ipynb`: DummyClassifier oraz sklearn Pipeline
-  z LogisticRegression (`build_baseline_pipeline` w `src/asi_project/model.py`); model
-  preprocessing wyłącznie wewnątrz Pipeline; `predict_proba`; accuracy, precision, recall, F1
-  i confusion matrix.
-- [ ] `metrics.json` z pełnych danych w katalogu głównym repozytorium.
-- [ ] Diagram v0 systemu docelowego w `docs/architecture.md`.
+Zanim zaczniecie budować pipeline i aplikację, musicie ustalić, **jak wasz system rozumie dane**
+oraz sprawdzić, czy pierwszy eksperyment jest poprawny.
 
-W Sprincie 1 nie używamy AutoGluona, W&B ani Kedro.
+### Co oznacza kontrakt danych?
+
+W tym projekcie **kontrakt danych (data contract)** to zestaw uzgodnionych zasad określających,
+jak zespół korzysta z wybranego datasetu.
+
+Nie jest to osobny plik ani dodatkowa technologia. Chodzi o to, żeby notebooki, kod treningowy,
+model i późniejsze API interpretowały dane w ten sam sposób.
+
+Kontrakt danych obejmuje przede wszystkim:
+
+- jaki dataset wykorzystujecie;
+- jaki jest target;
+- która klasa jest klasą pozytywną;
+- które kolumny wolno wykorzystać jako cechy (**ALLOWED FEATURES**);
+- których kolumn nie wolno używać (**EXCLUDED FEATURES**);
+- które cechy traktujecie jako numeryczne, a które jako kategoryczne;
+- jaki jest moment predykcji;
+- jak dzielicie dane na train i test;
+- jak traktujecie braki danych, wartości specjalne i ewentualne duplikaty;
+- które operacje należą do przygotowania danych, a które do modelu.
+
+Część kontraktu jest już określona przez prowadzącą w:
+
+- `docs/datasets.md`;
+- `src/asi_project/datasets.yaml`.
+
+Zespół nie zmienia targetu, klasy pozytywnej ani list ALLOWED / EXCLUDED FEATURES.
+
+Decyzje zespołu zapisujecie przede wszystkim w:
+
+- `project.yaml`;
+- `notebooks/01_eda.ipynb`;
+- `src/asi_project/data.py`;
+- karcie projektu w `README.md`.
+
+---
+
+## Trzy rodzaje przetwarzania danych
+
+W tym sprincie rozdzielamy trzy różne rzeczy.
+
+### 1. Input normalization
+
+To proste operacje, które można wykonać również później dla **jednego nowego rekordu**
+przesłanego do API.
+
+Nie mogą korzystać z:
+
+- targetu;
+- informacji o innych rekordach;
+- statystyk całego datasetu.
+
+Ta sama funkcja będzie później używana podczas inferencji.
+
+Przykład: ujednolicenie formatu wartości tekstowej albo zamiana umownej wartości specjalnej
+na brak danych.
+
+Kod: `normalize_input()` w `src/asi_project/data.py`.
+
+### 2. Training-only filtering
+
+To operacje wykonywane tylko podczas przygotowania danych treningowych.
+
+Przykłady:
+
+- usunięcie rekordu bez targetu;
+- usunięcie duplikatów.
+
+Takich operacji **nie wykonujemy podczas predykcji pojedynczego nowego rekordu**.
+
+Kod: `filter_training_rows()` w `src/asi_project/data.py`.
+
+Jeśli wasz dataset nie wymaga takiego filtrowania, nie dodawajcie go na siłę. Decyzję opiszcie
+w notebooku EDA.
+
+### 3. Model preprocessing
+
+To operacje, które wymagają `fit()`, ponieważ uczą się czegoś na danych treningowych.
+
+Przykłady:
+
+- imputacja medianą;
+- skalowanie;
+- kodowanie kategorii.
+
+Te operacje muszą być częścią sklearn `Pipeline` i nie powinny trafiać do `normalize_input()`.
+
+Kod: `src/asi_project/model.py`.
+
+---
+
+## Co macie zrobić
+
+### Krok 1. Przygotujcie repozytorium i środowisko
+
+W aktywnym środowisku `asi-ml` uruchomcie:
+
+```bash
+conda env update -n asi-ml -f environment.yml --prune
+python -m pip install --no-deps -e .
+pre-commit install
+python scripts/check_env.py
+pytest
+```
+
+Pracujcie przez gałęzie i Pull Requesty do `main`.
+
+Każdy PR musi być przejrzany przez osobę inną niż autor.
+
+---
+
+### Krok 2. Wybierzcie dataset
+
+Przeczytajcie:
+
+```text
+docs/datasets.md
+```
+
+Wybierzcie jeden dataset z zatwierdzonej listy i wpiszcie jego identyfikator do:
+
+```text
+project.yaml
+```
+
+Sprawdźcie szczególnie:
+
+- target;
+- klasę pozytywną;
+- ALLOWED FEATURES;
+- EXCLUDED FEATURES;
+- moment predykcji;
+- strategię splitu.
+
+---
+
+### Krok 3. Uzupełnijcie kartę projektu
+
+W `README.md` uzupełnijcie:
+
+- zespół i integratora Sprintu 1;
+- wybrany dataset;
+- źródło i licencję;
+- DOI;
+- datę pobrania danych;
+- SHA-256 pobranego pliku;
+- informację o danych osobowych;
+- target i klasę pozytywną;
+- główną metrykę wraz z uzasadnieniem;
+- użytkownika systemu;
+- decyzję, którą ma wspierać model.
+
+---
+
+### Krok 4. Pobierzcie dane
+
+Pełne dane pobierzcie skryptem:
+
+```bash
+python scripts/download_data.py
+```
+
+Pełne dane **nie mogą trafić do Gita**.
+
+Zapiszcie SHA-256 z `fingerprint.json` w karcie projektu.
+
+Następnie utwórzcie małą próbkę używaną przez testy i CI:
+
+```bash
+python scripts/make_ci_sample.py
+```
+
+W repozytorium ma znaleźć się:
+
+```text
+data/01_raw/sample.csv
+```
+
+---
+
+### Krok 5. Zróbcie EDA
+
+Uzupełnijcie:
+
+```text
+notebooks/01_eda.ipynb
+```
+
+Sprawdźcie co najmniej:
+
+- liczbę rekordów i kolumn;
+- typy danych;
+- rozkład targetu;
+- braki danych;
+- wartości specjalne;
+- duplikaty;
+- właściwości ALLOWED FEATURES.
+
+EDA nie ma być tylko zbiorem wykresów.
+
+Po każdej ważnej obserwacji zapiszcie **decyzję**, np.:
+
+- czy dana wartość specjalna powinna zostać zamieniona na brak danych;
+- czy potrzebne jest training-only filtering;
+- które cechy traktujecie jako numeryczne;
+- które cechy traktujecie jako kategoryczne.
+
+---
+
+### Krok 6. Zaimplementujcie przygotowanie danych
+
+W:
+
+```text
+src/asi_project/data.py
+```
+
+uzupełnijcie miejsca TODO.
+
+#### `normalize_input()`
+
+Dodajcie reguły input normalization właściwe dla waszego datasetu.
+
+Funkcja musi być inference-safe, czyli działać na pojedynczym rekordzie bez targetu i bez
+statystyk całego zbioru.
+
+#### `filter_training_rows()`
+
+Dodajcie tylko te operacje, które rzeczywiście są potrzebne podczas treningu.
+
+Jeśli dataset nie wymaga filtrowania, pozostawcie funkcję prostą i opiszcie decyzję w EDA.
+
+Po zmianach uruchomcie:
+
+```bash
+pytest
+```
+
+---
+
+### Krok 7. Zbudujcie baseline
+
+Uzupełnijcie:
+
+```text
+src/asi_project/model.py
+notebooks/02_baseline.ipynb
+```
+
+Macie przygotować dwa modele:
+
+1. `DummyClassifier`;
+2. `LogisticRegression` wewnątrz sklearn `Pipeline`.
+
+W `Pipeline` umieśćcie model preprocessing wymagający `fit()`, np.:
+
+- imputację;
+- skalowanie;
+- kodowanie kategorii.
+
+Użyjcie strategii splitu zapisanej w kontrakcie datasetu.
+
+Policzcie:
+
+- accuracy;
+- precision;
+- recall;
+- F1;
+- confusion matrix.
+
+Dodatkowo model ma obsługiwać:
+
+```python
+predict_proba()
+```
+
+Porównajcie `LogisticRegression` z `DummyClassifier` na głównej metryce projektu.
+
+Na pełnych danych zapiszcie:
+
+```text
+metrics.json
+```
+
+---
+
+### Krok 8. Narysujcie architekturę v0
+
+Uzupełnijcie:
+
+```text
+docs/architecture.md
+```
+
+Diagram ma pokazywać docelowy system, który będziecie rozwijać w kolejnych sprintach:
+
+```text
+dane
+  ↓
+pipeline treningowy
+  ↓
+model
+  ↓
+API
+  ↓
+UI
+```
+
+oraz osobno miejsce na persistence i późniejsze wdrożenie.
+
+Nie implementujcie jeszcze elementów przyszłych sprintów.
+
+---
+
+## Co musi być gotowe na koniec Sprintu 1
+
+- [ ] Dataset jest wybrany i wpisany do `project.yaml`.
+- [ ] Karta projektu w `README.md` jest kompletna.
+- [ ] Pełne dane są pobierane skryptem i nie znajdują się w repozytorium.
+- [ ] `data/01_raw/sample.csv` znajduje się w repozytorium i zawiera obie klasy.
+- [ ] `project.yaml` zawiera decyzje zespołu dotyczące typów cech i splitu.
+- [ ] `validate()` przechodzi dla danych projektu.
+- [ ] `normalize_input()` jest zaimplementowane i przechodzi testy inference-safe.
+- [ ] `filter_training_rows()` jest zaimplementowane, jeśli dataset tego wymaga.
+- [ ] `notebooks/01_eda.ipynb` zawiera EDA oraz zapisane decyzje.
+- [ ] `DummyClassifier` i `LogisticRegression` są porównane.
+- [ ] `LogisticRegression` działa wewnątrz sklearn `Pipeline`.
+- [ ] `predict_proba()` działa.
+- [ ] `metrics.json` pochodzi z pełnych danych.
+- [ ] `docs/architecture.md` zawiera diagram v0.
+- [ ] CI na `main` jest zielone.
+- [ ] Żaden wymagany test z `tests/test_project.py` nie jest pominięty.
+- [ ] Każda osoba w zespole ma własne zadanie i zrobiła merytoryczne review pracy innej osoby.
+
+---
+
+## Jak sprawdzić, że Sprint 1 jest gotowy
+
+Najpierw uruchomcie:
+
+```bash
+pytest
+pre-commit run --all-files
+python scripts/check_dod.py --sprint 1
+```
+
+Przed zamknięciem sprintu:
+
+```bash
+python scripts/check_dod.py --sprint 1 --strict
+```
+
+Dodatkowo osoba, która **nie tworzyła baseline'u**, wykonuje smoke test na świeżym klonie:
+
+```text
+świeży klon
+→ środowisko
+→ download_data.py
+→ notebook 02: Restart & Run All
+→ metrics.json
+```
+
+Jeśli ten proces działa bez ręcznego poprawiania plików, baseline jest odtwarzalny.
+
+---
+
+## Przygotowanie do Sprintu 2
+
+Pod koniec Sprintu 1 każda osoba instaluje Kedro i sprawdza, czy działa:
+
+```bash
+python -m pip install -r requirements/preflight-s2.txt -c constraints.txt
+kedro info
+```
+
+W Sprincie 1 **nie budujecie jeszcze pipeline'u Kedro**. To tylko sprawdzenie środowiska przed
+kolejnym sprintem.
+
+---
+
+## Podział pracy w zespole
+
+Przykładowe obszary odpowiedzialności:
+
+- dataset, karta projektu i kontrakt danych;
+- EDA;
+- input normalization i training-only filtering;
+- baseline i metryki;
+- CI, testy i diagram architektury.
+
+Nie musicie dzielić pracy dokładnie w ten sposób.
+
+Każda osoba:
+
+- ma co najmniej jeden własny obszar pracy;
+- robi merytoryczne review przynajmniej jednego PR innej osoby.
+
+Integrator Sprintu 1 pilnuje:
+
+- kompletności Definition of Done;
+- smoke testu;
+- przygotowania krótkiego demo na zamknięcie sprintu.
+
+W parach obowiązuje ten sam zakres CORE. Oznacza to większą liczbę zadań przypadającą na jedną
+osobę.
+
+---
 
 ## OPTIONAL
 
-- Sekcja ograniczeń danych w karcie projektu (zakres czasowy, możliwe obciążenia, braki).
-- Dodatkowe analizy EDA.
+Jeśli zespół skończy zakres obowiązkowy wcześniej, może dodatkowo:
 
-## Wymagane artefakty
+- rozbudować EDA;
+- opisać ograniczenia datasetu, np. zakres czasowy, możliwe biasy i braki danych.
 
-`project.yaml` · karta projektu w `README.md` · `data/01_raw/sample.csv` ·
-`src/asi_project/data.py` (input normalization, training-only filtering) ·
-`src/asi_project/model.py` (Pipeline) · `notebooks/01_eda.ipynb` ·
-`notebooks/02_baseline.ipynb` · `metrics.json` · `docs/architecture.md` · zielone CI.
+Elementy OPTIONAL nie są wymagane do zaliczenia Sprintu 1.
 
-## Definition of Done
+---
 
-- CI na gałęzi `main` jest zielone, a żaden test z `tests/test_project.py` nie jest pominięty.
-- Świeży klon → środowisko → `scripts/download_data.py` → notebook 02 od zera
-  (Restart & Run All) → `metrics.json`.
-- Test kontraktu danych potwierdza dokładnie dwie klasy targetu i obecność klasy pozytywnej.
-- LogisticRegression jest porównana z DummyClassifier na metryce głównej zespołu.
-- `metrics.json` pochodzi z pełnych danych (`data_mode: full`) i przechodzi walidację.
-- Karta projektu i diagram v0 są uzupełnione (bez znaczników TODO).
-- Każda osoba ma owned item z merytorycznym review innej osoby.
+## Najczęstszy błąd w tym sprincie
 
-Raport punktów sprawdzalnych automatycznie: `python scripts/check_dod.py --sprint 1`
-(na zamknięciu sprintu: `python scripts/check_dod.py --sprint 1 --strict`).
+Nie przenoście do `normalize_input()` operacji, które wymagają nauczenia parametrów na danych.
 
-## CI
+Przykład:
 
-- pre-commit: ruff (lint i formatowanie), nbstripout, podstawowe hooki plików;
-- pytest: rejestr datasetów, logika kontraktu, testy projektu (kontrakt na próbce,
-  input normalization inference-safe, brak EXCLUDED FEATURES w X, `predict_proba`,
-  determinizm Pipeline, kontrakt `metrics.json`);
-- po pojawieniu się `metrics.json`: wykonanie notebooka 02 od początku do końca na próbce CI
-  i walidacja wyniku;
-- raport Definition of Done w podsumowaniu joba (informacyjnie).
+```text
+uzupełnienie braków medianą
+```
 
-Testy projektu są pomijane z komunikatem, dopóki dany krok nie jest wykonany (np. nie ma
-jeszcze próbki). Dzięki temu można scalać PR-y częściowe, a raport DoD pokazuje, czego brakuje.
+wymaga wyliczenia mediany na danych treningowych, więc należy do sklearn `Pipeline`, a nie do
+input normalization.
 
-## Smoke test / pre-flight
-
-- Smoke: pełny baseline na świeżym klonie wykonuje osoba inna niż autor baseline'u.
-- Pre-flight gotowości do Sprintu 2 (bez pracy z Kedro), u każdej osoby:
-
-  ```bash
-  python -m pip install -r requirements/preflight-s2.txt -c constraints.txt
-  kedro info
-  ```
-
-## Decyzja zespołu
-
-- Target i klasa pozytywna (z kontraktu) oraz metryka główna z uzasadnieniem.
-- Które operacje są input normalization, które training-only filtering, a które model
-  preprocessing.
-- Typy cech: które ALLOWED FEATURES traktujecie jako numeryczne, a które jako kategoryczne.
-
-## ADR
-
-Nie dotyczy. Uzasadnienie metryki głównej jest w karcie projektu. Pierwszy ADR powstaje
-w Sprincie 2.
-
-## Indywidualna odpowiedzialność
-
-- Każda osoba ma owned item, np.: kontrakt danych i input normalization / EDA / baseline /
-  CI i karta projektu.
-- Każda osoba robi co najmniej jedno merytoryczne review cudzego PR.
-- Integrator sprintu (rotacyjnie) pilnuje DoD, smoke testu i krótkiego demo na zamknięciu.
-- Krótki checkpoint ustny w trakcie zajęć (losowa osoba, „pokaż w repo…”).
-- Pary realizują ten sam CORE (więcej owned items na osobę). Pracę w parach oznaczajcie
-  w commitach dopiskiem `Co-authored-by:`.
-
-## Krok po kroku
-
-1. **Środowisko (15.10).** W aktywnym środowisku `asi-ml`:
-
-   ```bash
-   conda env update -n asi-ml -f environment.yml --prune
-   python -m pip install --no-deps -e .
-   pre-commit install
-   python scripts/check_env.py
-   ```
-
-2. **Dataset (15.10).** Przeczytajcie `docs/datasets.md`, wybierzcie dataset, wpiszcie jego id
-   w `project.yaml`. Uzupełnijcie pierwszą część karty projektu w README.
-3. **Dane.** `python scripts/download_data.py` (zapiszcie SHA-256 w karcie), potem
-   `python scripts/make_ci_sample.py` i commit próbki `data/01_raw/sample.csv`.
-4. **EDA (notebook 01).** Inspekcja, kontrakt, target, EDA. Na tej podstawie:
-   reguły input normalization w `normalize_input()`, decyzja o training-only filtering
-   w `filter_training_rows()`, typy cech w `project.yaml`. Uruchomcie `pytest`.
-5. **Baseline (22.10).** Zaimplementujcie `build_baseline_pipeline()` w
-   `src/asi_project/model.py`, uzupełnijcie notebook 02, uruchomcie go od początku do końca
-   na pełnych danych i scalcie PR z `metrics.json`.
-6. **Diagram v0.** Uzupełnijcie `docs/architecture.md`.
-7. **Domknięcie.** `python scripts/check_dod.py --sprint 1 --strict`, smoke na świeżym klonie
-   wykonany przez inną osobę, pre-flight S2 u wszystkich.
-
-Każdą zmianę wprowadzajcie przez gałąź i Pull Request do `main`. Zasady PR i review są
-w README.
-
-## Co musi być gotowe przed Sprintem 2
-
-`validate()` i `normalize_input()` z zielonymi testami, baseline Pipeline, skrypt danych,
-próbka CI i działające `kedro info` u wszystkich.
-
-## Największe ryzyko
-
-Operacje wymagające `fit` (np. uzupełnianie braków medianą) trafiają do input normalization.
-Test inference-safe w CI to wykryje — przegląd tej funkcji jest też tematem checkpointu ustnego.
+Testy projektu mają wykrywać takie przypadki.

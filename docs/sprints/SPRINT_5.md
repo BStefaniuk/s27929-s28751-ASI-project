@@ -1,108 +1,650 @@
-# Sprint 5 — System lokalny
+# Sprint 5 — System lokalny: UI, API i Postgres
 
-**Daty:** 17.12.2026 – 07.01.2027 · **Spotkania:** 17.12 (start sprintu), 07.01 (zamknięcie sprintu i start Sprintu 6) · **Deadline:** stan gałęzi `main` na początku zajęć 07.01.2027
+**Daty:** 17.12.2026 – 07.01.2027
+**Spotkania:** 17.12 (start Sprintu 5) oraz 07.01 (zamknięcie Sprintu 5 i start Sprintu 6)
+**Deadline:** stan gałęzi `main` na początku zajęć 07.01.2027
 
-Realny czas pracy to ok. tydzień (17–23.12). Przerwa świąteczna 24.12.2026 – 06.01.2027 nie jest
-planowanym czasem pracy — zakres sprintu da się zamknąć do 23.12.
+## Ważne: realny czas pracy
 
-## Cel
+Przerwa świąteczna trwa od 24.12.2026 do 06.01.2027 i **nie jest planowanym czasem pracy**.
 
-UI, API i Postgres uruchamiają się lokalnie jedną komendą, z konfiguracją przez zmienne
-środowiskowe i healthcheckami.
+Dlatego zakres Sprintu 5 został ułożony tak, żeby dało się go zamknąć przed przerwą, czyli
+realnie do 23.12.
 
-## Pytanie architektoniczne
+---
 
-Jak usługi się odnajdują i skąd biorą konfigurację, żeby system działał tak samo na każdej
-maszynie?
+## Co zrobicie w tym sprincie
 
-## Co powinniście rozumieć po tym sprincie
+Macie już działające API w Dockerze.
 
-- Usługi odnajdują się po nazwach w sieci.
-- Ten sam obraz działa z różną konfiguracją.
-- Stan żyje w osobnej usłudze z wolumenem.
-- Healthchecki i kolejność startu.
-- Ten sam kontrakt persistence działa na innym backendzie.
+Teraz zbudujecie pierwszy **lokalny system wielousługowy**:
 
-## CORE
+```text
+Streamlit UI
+    ↓
+FastAPI
+    ↓
+PostgreSQL
+```
 
-- [ ] Streamlit: formularz zgodny z kontraktem API, wynik i prawdopodobieństwo; adres API
-  i token z env.
-- [ ] Dockerfile UI bez zależności ML.
-- [ ] docker compose z usługami `api`, `ui` i `db` (Postgres z nazwanym wolumenem);
-  sterownik PostgreSQL w obrazie API.
-- [ ] Konfiguracja przez env: hasła i token w `.env`, nie w pliku compose.
-- [ ] Healthchecki.
-- [ ] Automatyczny smoke całego systemu lokalnego w trybie `sql` (warstwa API).
-- [ ] Manualny UI check (opis niżej).
+Wszystkie trzy elementy będą uruchamiane razem przez:
 
-Jedyną nową cięższą koncepcją architektoniczną jest docker compose. Streamlit i Postgres są
-silnie scaffoldowane i używane w minimalnym zakresie.
+```bash
+docker compose up --build
+```
+
+Na koniec sprintu użytkownik ma móc:
+
+1. otworzyć Streamlit;
+2. wpisać dane do formularza;
+3. wysłać je do API;
+4. otrzymać predykcję;
+5. zapisać wynik w PostgreSQL.
+
+---
+
+## Najważniejsza idea Sprintu 5
+
+W Sprincie 4 uruchamialiście pojedynczą usługę API.
+
+W Sprincie 5 odpowiadacie na pytanie:
+
+> Jak połączyć kilka usług tak, żeby działały razem na różnych komputerach i korzystały z tej
+> samej konfiguracji?
+
+Najważniejszą nową koncepcją jest **Docker Compose**.
+
+Streamlit i PostgreSQL są używane w minimalnym zakresie i mają być silnie oparte na przygotowanym
+scaffoldzie.
+
+---
+
+## Co nowego pojawia się w tym sprincie
+
+### Docker Compose
+
+Docker Compose pozwala uruchomić kilka powiązanych usług jedną komendą.
+
+W tym sprincie są to:
+
+```text
+api
+ui
+db
+```
+
+Każda usługa działa we własnym kontenerze.
+
+Compose opisuje:
+
+- jakie obrazy mają zostać zbudowane;
+- jakie zmienne środowiskowe otrzymują usługi;
+- jak usługi się ze sobą komunikują;
+- jakie wolumeny są używane;
+- jakie healthchecki obowiązują.
+
+---
+
+### Usługi odnajdują się po nazwach
+
+W sieci Docker Compose usługi mogą komunikować się przez swoje nazwy.
+
+To znaczy, że UI nie powinno zakładać, że API zawsze działa pod `localhost`.
+
+W Compose API może być dostępne pod nazwą:
+
+```text
+api
+```
+
+a baza pod nazwą:
+
+```text
+db
+```
+
+Dzięki temu konfiguracja działa niezależnie od konkretnego komputera.
+
+---
+
+### Streamlit
+
+Streamlit jest prostym interfejsem użytkownika dla waszego API.
+
+W tym kursie UI ma przede wszystkim:
+
+- zebrać dane w formularzu;
+- wysłać request do `/predict`;
+- pokazać wynik;
+- pokazać prawdopodobieństwo klasy pozytywnej.
+
+UI nie powinno zawierać modelu ML.
+
+Nie powinno też powtarzać logiki model preprocessing.
+
+Streamlit komunikuje się z API.
+
+---
+
+### PostgreSQL
+
+W Sprincie 4 używaliście lokalnego SQLite.
+
+W Sprincie 5 przechodzicie na PostgreSQL uruchamiany jako osobna usługa:
+
+```text
+db
+```
+
+Nie zmieniacie idei persistence.
+
+API nadal korzysta z tego samego kontraktu repository.
+
+Zmienia się backend bazy.
+
+---
+
+### Zmienne środowiskowe
+
+Ten sam obraz kontenera powinien działać z różnymi ustawieniami.
+
+Dlatego konfigurację przekazujemy przez env.
+
+Przykłady:
+
+- adres API;
+- `API_KEY`;
+- `DATABASE_URL`;
+- hasło do PostgreSQL.
+
+Prawdziwe wartości trafiają do lokalnego:
+
+```text
+.env
+```
+
+Do repozytorium trafia:
+
+```text
+.env.example
+```
+
+bez sekretów.
+
+---
+
+### Healthcheck
+
+Healthcheck odpowiada na pytanie:
+
+> Czy dana usługa jest już gotowa do pracy?
+
+To szczególnie ważne w systemie z kilkoma kontenerami.
+
+Samo uruchomienie procesu nie zawsze oznacza, że usługa jest gotowa przyjmować requesty.
+
+Healthchecki pomagają określić stan:
+
+- API;
+- bazy;
+- pozostałych usług potrzebnych do startu systemu.
+
+---
+
+### Wolumen
+
+Baza danych nie powinna tracić danych przy zwykłym ponownym uruchomieniu kontenera.
+
+Dlatego PostgreSQL korzysta z nazwanego wolumenu.
+
+Stan bazy żyje poza samym kontenerem.
+
+---
+
+## Co macie zrobić
+
+### Krok 1. Sprawdźcie Docker Compose
+
+Każda osoba powinna mieć działające:
+
+```bash
+docker compose version
+```
+
+Jeśli komenda nie działa, rozwiążcie problem przed rozpoczęciem właściwej pracy nad Compose.
+
+---
+
+### Krok 2. Zbudujcie Streamlit UI
+
+Rozwijajcie przygotowany scaffold:
+
+```text
+ui/
+```
+
+UI ma zawierać formularz zgodny z kontraktem `/predict`.
+
+Formularz powinien zbierać cechy wymagane przez model.
+
+Po wysłaniu danych Streamlit:
+
+```text
+formularz
+→ request do API
+→ odpowiedź API
+→ wynik w UI
+```
+
+Pokażcie użytkownikowi co najmniej:
+
+- etykietę predykcji;
+- prawdopodobieństwo klasy pozytywnej.
+
+---
+
+### Krok 3. Pobierajcie adres API i token z env
+
+Streamlit nie powinien mieć na stałe wpisanych:
+
+- adresu API;
+- `API_KEY`.
+
+Obie wartości pobierajcie ze zmiennych środowiskowych.
+
+Dzięki temu ten sam obraz UI może działać lokalnie i później w chmurze.
+
+---
+
+### Krok 4. Przygotujcie Dockerfile UI
+
+Rozwijajcie:
+
+```text
+docker/ui.Dockerfile
+```
+
+Obraz UI powinien zawierać tylko zależności potrzebne Streamlitowi.
+
+Nie instalujcie w nim bibliotek ML, jeśli UI ich nie potrzebuje.
+
+Model znajduje się po stronie API.
+
+---
+
+### Krok 5. Przygotujcie usługę PostgreSQL
+
+W `docker-compose.yml` dodajcie usługę:
+
+```text
+db
+```
+
+opartą na PostgreSQL.
+
+Skonfigurujcie:
+
+- bazę;
+- użytkownika;
+- hasło;
+- nazwany wolumen.
+
+Hasło nie może być wpisane bezpośrednio do `docker-compose.yml`.
+
+Powinno pochodzić z env.
+
+---
+
+### Krok 6. Podłączcie API do PostgreSQL
+
+API powinno korzystać z:
+
+```text
+DATABASE_URL
+```
+
+wskazującego bazę PostgreSQL uruchomioną przez Compose.
+
+Nie twórzcie osobnego mechanizmu persistence tylko dla Postgresa.
+
+Ten sam kontrakt repository ze Sprintu 4 ma działać z nowym backendem.
+
+W obrazie API musi znajdować się sterownik PostgreSQL.
+
+---
+
+### Krok 7. Zbudujcie `docker-compose.yml`
+
+Compose ma uruchamiać trzy usługi:
+
+```text
+api
+ui
+db
+```
+
+Po:
+
+```bash
+docker compose up --build
+```
+
+system powinien uruchomić się jako całość.
+
+Compose powinien zawierać konfigurację potrzebną do komunikacji między usługami, ale bez
+prawdziwych sekretów zapisanych bezpośrednio w pliku.
+
+---
+
+### Krok 8. Dodajcie healthchecki
+
+Skonfigurujcie healthchecki potrzebne do uruchomienia systemu.
+
+Celem jest uniknięcie sytuacji, w której np. API próbuje korzystać z bazy, zanim PostgreSQL jest
+gotowy.
+
+Healthchecki mają pomagać określić, czy system rzeczywiście działa.
+
+---
+
+### Krok 9. Uzupełnijcie `.env.example`
+
+` .env.example` powinien pokazywać, jakie zmienne są potrzebne do uruchomienia systemu.
+
+Powinny być tam nazwy wymaganych zmiennych, ale nie prawdziwe sekrety.
+
+Lokalny `.env` może zawierać rzeczywiste wartości i **nie trafia do repozytorium**.
+
+---
+
+### Krok 10. Uruchomcie cały system
+
+Na świeżym środowisku lokalnym sprawdźcie:
+
+```bash
+docker compose up --build
+```
+
+Powinny uruchomić się:
+
+```text
+api
+ui
+db
+```
+
+API ma działać w trybie:
+
+```text
+persistence = sql
+```
+
+z PostgreSQL.
+
+---
+
+### Krok 11. Uruchomcie automatyczny smoke test
+
+Używacie tego samego skryptu smoke, który powstał w Sprincie 4.
+
+Smoke testuje warstwę API.
+
+Powinien sprawdzić:
+
+1. `/healthz`;
+2. tryb persistence;
+3. `/predict` z poprawnym tokenem;
+4. schemat odpowiedzi;
+5. zapis rekordu w PostgreSQL.
+
+W Sprincie 5 oczekiwany tryb to:
+
+```text
+sql
+```
+
+---
+
+### Krok 12. Wykonajcie manualny UI check
+
+Automatyczny smoke **nie testuje Streamlita**.
+
+Dlatego UI sprawdzacie ręcznie.
+
+Minimum:
+
+1. Streamlit uruchamia się;
+2. formularz jest widoczny;
+3. można wprowadzić dane;
+4. można wykonać co najmniej jedną predykcję;
+5. wynik widoczny w UI jest zgodny z odpowiedzią API.
+
+Nie używamy Selenium, Playwright ani podobnych frameworków.
+
+---
+
+### Krok 13. Uzupełnijcie README
+
+Dodajcie sekcję:
+
+```text
+Docker quickstart
+```
+
+Powinna wyjaśniać co najmniej:
+
+- jak przygotować `.env`;
+- jak uruchomić system;
+- gdzie otworzyć UI;
+- jak zatrzymać system.
+
+Podstawową komendą jest:
+
+```bash
+docker compose up --build
+```
+
+---
+
+### Krok 14. Uzupełnijcie ADR-3
+
+W Sprincie 4 powstał szkic ADR-3.
+
+Teraz rozszerzcie go o decyzje dotyczące:
+
+- stanu;
+- persistence;
+- konfiguracji;
+- lokalnego systemu wielousługowego.
+
+Nie finalizujecie jeszcze części dotyczącej wdrożenia w chmurze.
+
+To nastąpi w Sprincie 6.
+
+---
+
+## Co musi być gotowe na koniec Sprintu 5
+
+- [ ] Streamlit zawiera formularz zgodny z kontraktem API.
+- [ ] UI pokazuje etykietę i prawdopodobieństwo klasy pozytywnej.
+- [ ] Adres API jest pobierany z env.
+- [ ] `API_KEY` jest pobierany z env.
+- [ ] Dockerfile UI działa.
+- [ ] Obraz UI nie zawiera niepotrzebnych zależności ML.
+- [ ] `docker-compose.yml` uruchamia `api`, `ui` i `db`.
+- [ ] `db` działa na PostgreSQL.
+- [ ] PostgreSQL korzysta z nazwanego wolumenu.
+- [ ] API ma sterownik PostgreSQL.
+- [ ] API korzysta z PostgreSQL przez istniejącą warstwę repository.
+- [ ] Hasła i tokeny nie są wpisane bezpośrednio do Compose.
+- [ ] `.env.example` jest uzupełniony.
+- [ ] Healthchecki są skonfigurowane.
+- [ ] `docker compose up --build` uruchamia cały system.
+- [ ] Automatyczny smoke przechodzi w trybie `sql`.
+- [ ] Rekord predykcji jest zapisany w PostgreSQL.
+- [ ] Manualny UI check został wykonany.
+- [ ] README zawiera „Docker quickstart”.
+- [ ] ADR-3 jest uzupełniony.
+- [ ] W repozytorium nie ma sekretów.
+- [ ] CI na `main` jest zielone.
+- [ ] Każda osoba w zespole ma własny obszar pracy i zrobiła merytoryczne review pracy innej osoby.
+
+---
+
+## Jak sprawdzić, że Sprint 5 jest gotowy
+
+Najważniejszy test zaczyna się od świeżego klonu.
+
+Przygotujcie lokalny `.env` na podstawie:
+
+```text
+.env.example
+```
+
+Następnie uruchomcie:
+
+```bash
+docker compose up --build
+```
+
+Oczekiwany system:
+
+```text
+Streamlit
+   ↓
+FastAPI
+   ↓
+PostgreSQL
+```
+
+Potem:
+
+1. uruchomcie automatyczny smoke test;
+2. sprawdźcie, że `/healthz` raportuje `sql`;
+3. wykonajcie `/predict`;
+4. potwierdźcie zapis rekordu w PostgreSQL;
+5. otwórzcie Streamlit;
+6. wykonajcie co najmniej jedną predykcję przez UI.
+
+Jeśli wszystko działa po jednym `docker compose up --build`, główny cel sprintu jest spełniony.
+
+---
+
+## Przygotowanie do Sprintu 6
+
+Do 07.01, najlepiej jeszcze przed 23.12, wykonajcie pre-flight chmury.
+
+### Artifact Registry
+
+Wypchnijcie obraz API do Artifact Registry jako:
+
+```text
+linux/amd64
+```
+
+### Hello deploy
+
+Wykonajcie prosty test wdrożenia w Cloud Run.
+
+To nie jest jeszcze właściwy deployment projektu.
+
+Chodzi tylko o potwierdzenie, że:
+
+- obraz można wypchnąć;
+- dane dostępowe działają;
+- Cloud Run działa;
+- zespół nie zacznie Sprintu 6 od rozwiązywania problemów z samym dostępem do chmury.
+
+---
+
+## Podział pracy w zespole
+
+Przykładowe obszary odpowiedzialności:
+
+- Streamlit UI;
+- Dockerfile UI;
+- Compose;
+- PostgreSQL i persistence;
+- healthchecki i konfiguracja;
+- smoke test i README;
+- pre-flight chmury;
+- uzupełnienie ADR-3.
+
+Nie musicie dzielić pracy dokładnie w ten sposób.
+
+Każda osoba:
+
+- ma co najmniej jeden własny obszar pracy;
+- robi merytoryczne review przynajmniej jednego PR innej osoby.
+
+Integrator Sprintu 5 pilnuje:
+
+- kompletności checklisty;
+- działania całego Compose;
+- manualnego UI checku;
+- wykonania pre-flightu chmury przed Sprintem 6.
+
+---
 
 ## OPTIONAL
 
-- Historia predykcji w UI.
-- `docker compose config` w CI.
+Jeśli zespół skończy zakres obowiązkowy wcześniej, może dodatkowo:
 
-## Miejsce w repozytorium
+- dodać historię predykcji w UI;
+- uruchamiać `docker compose config` w CI.
 
-Scaffold przygotowany od startu Sprintu 1 (README w katalogach):
+Elementy OPTIONAL nie są wymagane do zaliczenia Sprintu 5.
 
-- `ui/` — interfejs Streamlit
-- `docker/ui.Dockerfile`, `docker-compose.yml` — obraz UI i system lokalny
-- `.env.example` — uzupełniona konfiguracja
-- `docs/adr/` — uzupełnienie ADR-3
+---
 
-## Wymagane artefakty
+## Najczęstsze błędy w tym sprincie
 
-Kod UI · Dockerfile UI · `docker-compose.yml` · uzupełnione `.env.example` ·
-„Docker quickstart” w README · wynik smoke · uzupełniony ADR-3.
+### 1. UI próbuje korzystać z modelu bezpośrednio
 
-## Definition of Done
+Streamlit komunikuje się z API.
 
-- Świeży klon + `.env` z przykładu + `docker compose up --build` → automatyczny smoke zielony
-  w trybie `sql` (rekord zapisany w Postgresie).
-- UI check wykonany: Streamlit się uruchamia, formularz jest dostępny, co najmniej jedna
-  predykcja wykonana ręcznie przez UI, wynik w UI odpowiada kontraktowi API.
-- W repozytorium nie ma sekretów.
-- ADR-3 jest uzupełniony.
+Model i preprocessing ML pozostają po stronie API.
 
-## CI
+---
 
-Jak w Sprincie 4.
+### 2. Używanie `localhost` między kontenerami
 
-## Smoke test / pre-flight
+W Docker Compose usługi komunikują się przez nazwy usług.
 
-- Automatyczny smoke (ten sam skrypt co w Sprincie 4) na compose w trybie `sql`. Skrypt nie
-  testuje Streamlita.
-- UI check: manualny check albo demo na zamknięciu sprintu (07.01), bez Selenium, Playwright
-  ani podobnych frameworków.
-- Pre-flight gotowości do Sprintu 6 (do 07.01, najlepiej przed 23.12): push obrazu API do
-  Artifact Registry jako `linux/amd64` i hello deploy na Cloud Run. To przygotowanie, a nie
-  główny efekt sprintu.
+Nie zakładajcie, że `localhost` oznacza inny kontener.
 
-## Decyzja zespołu
+---
 
-Nazwy i źródła zmiennych środowiskowych, healthchecki, wolumeny.
+### 3. Hasła wpisane do `docker-compose.yml`
 
-## ADR
+Sekrety powinny pochodzić z `.env`.
 
-**ADR-3 — uzupełnienie:** stan, persistence i konfiguracja w lokalnym systemie wielousługowym.
+Do repozytorium nie trafiają prawdziwe wartości.
 
-## Indywidualna odpowiedzialność
+---
 
-Owned items, np.: UI / compose i Postgres / smoke i README / pre-flight chmury i uzupełnienie
-ADR-3. Merytoryczne review, rotacyjny integrator, krótki checkpoint ustny.
+### 4. Tworzenie nowej warstwy persistence tylko dla PostgreSQL
 
-## Poziom wsparcia
+Zmienia się backend bazy, nie kontrakt aplikacji.
 
-Niski: szkielety z TODO i kryteria rezultatu. Referencja compose jest dostępna od startu
-sprintu, bo w przerwie świątecznej nie ma wsparcia.
+API nadal powinno korzystać z istniejącego repository.
 
-## Co musi być gotowe przed Sprintem 6
+---
 
-Działający compose, obraz w Artifact Registry, działający hello deploy, uzupełniony ADR-3.
+### 5. Brak trwałego wolumenu dla bazy
 
-## Największe ryzyko
+PostgreSQL powinien korzystać z nazwanego wolumenu.
 
-Realnie tylko tydzień pracy przed przerwą. Ograniczenie: jedna nowa cięższa koncepcja (compose),
-GCP przygotowane już w Sprincie 4, zakres możliwy do zamknięcia do 23.12.
+Stan bazy nie powinien zależeć od życia pojedynczego kontenera.
+
+---
+
+## Najważniejszy rezultat Sprintu 5
+
+Po tym sprincie powinniście móc odpowiedzieć:
+
+> Czy nowa osoba może sklonować repozytorium, przygotować `.env`, uruchomić
+> `docker compose up --build` i otrzymać działający system z UI, API i PostgreSQL?
+
+Jeżeli odpowiedź brzmi „tak”, lokalna wersja systemu jest gotowa do przejścia do wdrożenia
+w chmurze.

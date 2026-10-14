@@ -1,103 +1,522 @@
 # Sprint 3 — Eksperymenty, wybór modelu i artefakt
 
-**Daty:** 12.11.2026 – 26.11.2026 · **Spotkania:** 12.11 (start sprintu), 19.11 (pełne), 26.11 (zamknięcie sprintu i start Sprintu 4) · **Deadline:** stan gałęzi `main` na początku zajęć 26.11.2026
+**Daty:** 12.11.2026 – 26.11.2026
+**Spotkania:** 12.11 (start Sprintu 3), 19.11 oraz 26.11 (zamknięcie Sprintu 3 i start Sprintu 4)
+**Deadline:** stan gałęzi `main` na początku zajęć 26.11.2026
 
-## Cel
+## Co zrobicie w tym sprincie
 
-Zespół porównuje eksperymenty, świadomie wybiera model produkcyjny i oddaje go jako pakiet
-ładowalny poza treningiem.
+Macie już reprodukowalny pipeline treningowy.
 
-## Pytanie architektoniczne
+W tym sprincie sprawdzicie kilka wariantów modeli, porównacie ich wyniki i wybierzecie model,
+który rzeczywiście ma trafić dalej do aplikacji.
 
-Który model idzie dalej i w jakiej postaci opuszcza środowisko treningowe?
+Nie wybieracie modelu wyłącznie na podstawie jednej metryki.
 
-## Co powinniście rozumieć po tym sprincie
+Sprawdzicie również:
 
-- Lineage: dane + kod + parametry → metryka → artefakt.
-- Kryteria niefunkcjonalne wyboru modelu.
-- Wersje i aliasy artefaktów.
-- Kontrakt artefaktu i zgodność bibliotek między treningiem a serwowaniem.
+- jak szybko model wykonuje predykcję;
+- ile miejsca zajmuje;
+- ile pamięci potrzebuje po wczytaniu.
 
-## CORE
+Wybrany model zapiszecie jako **pakiet modelu**, który będzie można pobrać i wczytać bez
+ponownego uruchamiania treningu.
 
-- [ ] Runy W&B z pipeline'u: parametry, metryki, git SHA oraz prosty identyfikator wersji
-  danych (fingerprint, hash albo identyfikator snapshotu); pierwszym runem jest baseline.
-- [ ] AutoGluon jako node z limitem czasu: co najmniej dwie sensowne konfiguracje plus baseline.
-- [ ] Świadomy wybór modelu produkcyjnego na podstawie tabeli: metryka główna, czas predykcji,
-  rozmiar artefaktu, pamięć przy ładowaniu. Model produkcyjny nie musi być AutoGluonem.
-- [ ] Pakiet modelu: katalog z modelem i `metadata.json` (m.in. cechy, target i klasa
-  pozytywna, metryki, git SHA, fingerprint danych, wersje bibliotek), zapisywany i wczytywany
-  wspólnymi funkcjami; w W&B jako Artifact z aliasem `production`.
-- [ ] Smoke artefaktu w czystym procesie.
-- [ ] Minimalna Model Card.
-- [ ] ADR-2.
+Na koniec sprintu model produkcyjny ma być gotowy do użycia przez API w Sprincie 4.
+
+---
+
+## Najważniejsza idea Sprintu 3
+
+W Sprincie 2 pipeline odpowiadał na pytanie:
+
+> Czy potrafimy odtworzyć trening?
+
+W Sprincie 3 odpowiadacie na dwa kolejne pytania:
+
+> Który model wybieramy do dalszej części systemu?
+
+oraz:
+
+> W jakiej postaci model opuszcza środowisko treningowe?
+
+---
+
+## Co nowego pojawia się w tym sprincie
+
+### W&B
+
+Weights & Biases służy w tym sprincie do śledzenia eksperymentów.
+
+Każdy ważny run powinien pozwolić odpowiedzieć:
+
+- na jakich danych pracowaliśmy;
+- z jakimi parametrami;
+- z jaką wersją kodu;
+- jaki wynik uzyskaliśmy.
+
+W każdym runie zapisujecie co najmniej:
+
+- parametry;
+- metryki;
+- Git SHA;
+- identyfikator wersji danych, np. fingerprint.
+
+Pierwszym runem powinien być baseline z poprzedniego sprintu.
+
+### AutoGluon
+
+AutoGluon służy do szybkiego porównania kilku sensownych konfiguracji modeli.
+
+Nie chodzi o uruchamianie dużego, kosztownego searchu.
+
+Wymagany zakres to:
+
+- baseline;
+- co najmniej dwie sensowne konfiguracje AutoGluona;
+- limit czasu treningu.
+
+AutoGluon **nie musi** zostać modelem produkcyjnym.
+
+Jeżeli inny model lepiej spełnia wymagania projektu, możecie wybrać właśnie jego.
+
+### Model produkcyjny
+
+Model produkcyjny to model, który wybieracie do dalszej części systemu.
+
+W tym kursie wybór nie opiera się wyłącznie na głównej metryce.
+
+Porównujecie również:
+
+- czas predykcji;
+- rozmiar artefaktu;
+- pamięć potrzebną do wczytania modelu.
+
+### Pakiet modelu
+
+Pakiet modelu to katalog zawierający zapisany model oraz informacje potrzebne do jego
+późniejszego użycia.
+
+Minimum:
+
+```text
+model
+metadata.json
+```
+
+`metadata.json` opisuje model i jego pochodzenie.
+
+Powinien zawierać m.in.:
+
+- cechy używane przez model;
+- target;
+- klasę pozytywną;
+- najważniejsze metryki;
+- Git SHA;
+- fingerprint danych;
+- wersje bibliotek.
+
+Dzięki temu w Sprincie 4 API nie musi wiedzieć, jak model był trenowany.
+
+Ma tylko wiedzieć, jak go wczytać i jakiej struktury wejścia oczekiwać.
+
+### W&B Artifact i alias `production`
+
+Wybrany pakiet modelu zapisujecie również jako W&B Artifact.
+
+Artefakt wybranego modelu oznaczacie aliasem:
+
+```text
+production
+```
+
+Dzięki temu dalsza część systemu nie musi znać konkretnego numeru eksperymentu.
+
+Wystarczy wskazać artefakt oznaczony jako `production`.
+
+---
+
+## Co macie zrobić
+
+### Krok 1. Sprawdźcie pre-flight ze Sprintu 2
+
+Każda osoba powinna mieć działające:
+
+- W&B;
+- AutoGluon.
+
+Sprawdźcie:
+
+```bash
+python scripts/check_env.py --autogluon
+```
+
+Jeżeli środowisko nie jest jeszcze przygotowane:
+
+```bash
+python -m pip install -r requirements/preflight-s3.txt -c constraints.txt
+```
+
+W&B powinno być skonfigurowane dla projektu zespołu.
+
+---
+
+### Krok 2. Zalogujcie baseline do W&B
+
+Pierwszym runem w W&B powinien być baseline znany z poprzednich sprintów.
+
+Run powinien zawierać:
+
+- parametry;
+- metryki;
+- Git SHA;
+- fingerprint danych.
+
+Nie zmieniajcie baseline'u tylko po to, żeby dopasować go do W&B.
+
+Celem jest zapisanie punktu odniesienia do późniejszych eksperymentów.
+
+---
+
+### Krok 3. Dodajcie eksperymenty AutoGluona do pipeline'u
+
+AutoGluon ma być uruchamiany jako element pipeline'u, a nie tylko z osobnego notebooka.
+
+Przygotujcie co najmniej dwie sensowne konfiguracje AutoGluona.
+
+Każdy eksperyment powinien mieć:
+
+- jawne parametry;
+- limit czasu;
+- zapis metryk;
+- run w W&B.
+
+Nie uruchamiajcie nieograniczonego searchu.
+
+Celem jest porównanie kilku rozsądnych wariantów, a nie maksymalizacja wyniku za wszelką cenę.
+
+---
+
+### Krok 4. Porównajcie modele
+
+Przygotujcie tabelę porównawczą obejmującą co najmniej:
+
+- główną metrykę projektu;
+- czas predykcji;
+- rozmiar artefaktu;
+- pamięć potrzebną po wczytaniu modelu.
+
+Porównanie powinno obejmować:
+
+- baseline;
+- co najmniej dwie konfiguracje AutoGluona.
+
+Jeżeli analizujecie dodatkowe modele, możecie dodać je do tej samej tabeli.
+
+---
+
+### Krok 5. Wybierzcie model produkcyjny
+
+Na podstawie tabeli zdecydujcie, który model trafia dalej.
+
+Model produkcyjny **nie musi być modelem z najwyższą wartością głównej metryki**, jeżeli
+pozostałe właściwości przemawiają za innym wyborem.
+
+Przykład:
+
+model z minimalnie niższym F1 może być lepszym wyborem, jeśli:
+
+- działa znacznie szybciej;
+- zajmuje mniej miejsca;
+- zużywa mniej pamięci.
+
+Decyzja musi być oparta na wynikach waszych eksperymentów.
+
+---
+
+### Krok 6. Zbudujcie pakiet modelu
+
+Zapiszcie model w postaci, którą można później wczytać bez uruchamiania treningu.
+
+Pakiet powinien zawierać co najmniej:
+
+```text
+model
+metadata.json
+```
+
+`metadata.json` powinien zawierać informacje wymagane przez kontrakt pakietu opisany w:
+
+```text
+src/asi_project/README.md
+```
+
+Nie twórzcie własnego, równoległego formatu, jeśli scaffold już określa strukturę.
+
+---
+
+### Krok 7. Dodajcie wspólne funkcje zapisu i odczytu
+
+Model powinien być zapisywany i wczytywany przez wspólne funkcje projektu.
+
+Celem jest uniknięcie sytuacji, w której:
+
+- trening zapisuje model w jeden sposób;
+- test ładuje go inaczej;
+- API w Sprincie 4 będzie wymagało trzeciej implementacji.
+
+Jedna ścieżka zapisu i odczytu ma być używana wszędzie.
+
+---
+
+### Krok 8. Zapiszcie model jako W&B Artifact
+
+Wybrany pakiet modelu zapiszcie w W&B jako Artifact.
+
+Artefakt produkcyjny oznaczcie aliasem:
+
+```text
+production
+```
+
+To właśnie ten alias będzie wskazywał model przeznaczony do dalszego użycia.
+
+---
+
+### Krok 9. Zróbcie smoke test modelu
+
+Smoke test ma odpowiedzieć na proste pytanie:
+
+> Czy da się pobrać wybrany model, wczytać go bez uruchamiania treningu i wykonać predykcję?
+
+Test powinien wykonać:
+
+```text
+pobranie artefaktu production
+→ wczytanie modelu
+→ predykcja dla 5 wierszy
+→ sprawdzenie schematu odpowiedzi
+```
+
+Smoke test uruchamiamy w czystym procesie, niezależnie od procesu treningowego.
+
+To przygotowuje model do użycia przez API w Sprincie 4.
+
+---
+
+### Krok 10. Uzupełnijcie Model Card
+
+Uzupełnijcie:
+
+```text
+docs/model_card.md
+```
+
+Model Card ma być krótka i praktyczna.
+
+Powinna opisywać co najmniej:
+
+- do czego służy model;
+- na jakich danych był trenowany;
+- jaki target przewiduje;
+- która klasa jest pozytywna;
+- jakie metryki osiąga;
+- jakie ma najważniejsze ograniczenia;
+- jaki model został wybrany jako `production`.
+
+Nie przepisujcie całej historii projektu.
+
+Model Card ma opisywać model, który rzeczywiście trafia dalej.
+
+---
+
+### Krok 11. Napiszcie ADR-2
+
+ADR-2 dokumentuje decyzję:
+
+> Dlaczego wybraliśmy właśnie ten model produkcyjny i w jakiej postaci przekazujemy go dalej?
+
+W ADR-2 wykorzystajcie liczby z własnych eksperymentów W&B.
+
+Powinny znaleźć się tam:
+
+- rozważane warianty;
+- kryteria wyboru;
+- najważniejsze wyniki;
+- ostateczna decyzja;
+- krótkie uzasadnienie.
+
+Plik trafia do:
+
+```text
+docs/adr/
+```
+
+---
+
+## Co musi być gotowe na koniec Sprintu 3
+
+- [ ] Baseline jest zapisany jako run W&B.
+- [ ] Runy W&B zawierają parametry, metryki, Git SHA i identyfikator wersji danych.
+- [ ] AutoGluon działa jako część pipeline'u.
+- [ ] Wykonano co najmniej dwie sensowne konfiguracje AutoGluona z limitem czasu.
+- [ ] Przygotowano tabelę porównującą modele.
+- [ ] Porównanie obejmuje główną metrykę, czas predykcji, rozmiar artefaktu i pamięć przy ładowaniu.
+- [ ] Zespół wybrał model produkcyjny.
+- [ ] Pakiet modelu zawiera model i `metadata.json`.
+- [ ] Model jest zapisywany i wczytywany wspólnymi funkcjami.
+- [ ] Pakiet modelu jest zapisany w W&B jako Artifact.
+- [ ] Artefakt produkcyjny ma alias `production`.
+- [ ] Smoke test pobiera `production`, wczytuje model i wykonuje predykcję.
+- [ ] `docs/model_card.md` jest uzupełniony.
+- [ ] ADR-2 jest napisany i zmergowany.
+- [ ] CI na `main` jest zielone.
+- [ ] Każda osoba w zespole ma własny obszar pracy i zrobiła merytoryczne review pracy innej osoby.
+
+---
+
+## Jak sprawdzić, że Sprint 3 jest gotowy
+
+Najważniejszy test nie polega na ponownym treningu modelu.
+
+Sprawdźcie ścieżkę:
+
+```text
+W&B Artifact: production
+→ pobranie
+→ wczytanie modelu
+→ predykcja 5 wierszy
+→ sprawdzenie schematu wyniku
+```
+
+Ten proces ma działać niezależnie od pipeline'u treningowego.
+
+Uruchomcie również:
+
+```bash
+pytest
+pre-commit run --all-files
+```
+
+CI powinno działać bez wykonywania pełnych eksperymentów online.
+
+W CI:
+
+- W&B działa w trybie `WANDB_MODE=disabled`;
+- AutoGluon jest wyłączony parametrem albo uruchamiany z bardzo krótkim limitem;
+- testowana jest możliwość zapisu i ponownego wczytania pakietu modelu.
+
+---
+
+## Co trafia do Sprintu 4
+
+Sprint 4 zacznie się od modelu, który już:
+
+- został wybrany;
+- ma opisane metadane;
+- ma alias `production`;
+- daje się pobrać;
+- daje się wczytać poza procesem treningowym;
+- zwraca predykcje.
+
+Dzięki temu w Sprincie 4 nie wracacie do eksperymentów.
+
+Budujecie usługę API wokół gotowego modelu.
+
+Jeżeli prowadząca przekaże dane dostępowe do GCP po swoim pre-flighcie, powinny być już dostępne
+przed rozpoczęciem Sprintu 4.
+
+---
+
+## Podział pracy w zespole
+
+Przykładowe obszary odpowiedzialności:
+
+- eksperymenty AutoGluona;
+- tracking W&B;
+- tabela porównawcza i pomiary;
+- pakiet modelu i `metadata.json`;
+- smoke test;
+- Model Card;
+- ADR-2.
+
+Nie musicie dzielić pracy dokładnie w ten sposób.
+
+Każda osoba:
+
+- ma co najmniej jeden własny obszar pracy;
+- robi merytoryczne review przynajmniej jednego PR innej osoby.
+
+Integrator Sprintu 3 pilnuje:
+
+- kompletności eksperymentów;
+- wyboru modelu;
+- gotowości artefaktu `production`;
+- smoke testu przed zamknięciem sprintu.
+
+---
 
 ## OPTIONAL
 
-- W&B Sweeps.
-- Feature importance.
-- Preset `optimize_for_deployment`.
-- Pełne wersjonowanie datasetu przez W&B Data Artifacts.
-- AutoGluon jako model produkcyjny.
+Jeśli zespół skończy zakres obowiązkowy wcześniej, może dodatkowo:
 
-## Miejsce w repozytorium
+- użyć W&B Sweeps;
+- przygotować feature importance;
+- przetestować preset `optimize_for_deployment`;
+- wersjonować dataset przez W&B Data Artifacts;
+- wybrać AutoGluon jako model produkcyjny.
 
-Scaffold przygotowany od startu Sprintu 1 (README w katalogach):
+Elementy OPTIONAL nie są wymagane do zaliczenia Sprintu 3.
 
-- `src/asi_project/pipelines/data_science/` — tracking W&B i node AutoGluona
-- `conf/base/` — parametry eksperymentów
-- pakiet modelu — kontrakt opisany w `src/asi_project/README.md`
-- smoke modelu — kontrakt opisany w `scripts/README.md`
-- `docs/model_card.md` — Model Card
-- `docs/adr/` — ADR-2
+---
 
-## Wymagane artefakty
+## Najczęstsze błędy w tym sprincie
 
-Projekt W&B · porównanie runów · pakiet `production` · skrypt smoke modelu ·
-`docs/model_card.md` · ADR-2.
+### 1. Wybór modelu tylko na podstawie F1
 
-## Definition of Done
+Model produkcyjny ma działać jako część systemu.
 
-- Pakiet `production` ładuje się w świeżym środowisku wyłącznie z W&B i zwraca predykcje
-  dla próbki.
-- ADR-2 i Model Card są zmergowane.
+Dlatego patrzycie również na:
 
-## CI
+- czas predykcji;
+- rozmiar artefaktu;
+- zużycie pamięci.
 
-Jak w Sprincie 2, a dodatkowo: `WANDB_MODE=disabled`; AutoGluon w środowisku `ci` wyłączony
-parametrem albo z kilkusekundowym limitem; test zapisu i odczytu pakietu modelu.
+### 2. Brak informacji o pochodzeniu modelu
 
-## Smoke test / pre-flight
+Sam plik modelu nie wystarcza.
 
-Pobranie `production` → wczytanie → predykcja 5 wierszy → sprawdzenie schematu odpowiedzi.
-To jest wejście dla API w Sprincie 4.
+Bez informacji o:
 
-## Decyzja zespołu
+- danych;
+- wersji kodu;
+- metrykach;
+- wersjach bibliotek
 
-Model produkcyjny i kryteria wyboru.
+trudno później ustalić, co właściwie zostało wdrożone.
 
-## ADR
+Dlatego wymagany jest `metadata.json`.
 
-**ADR-2** — wybór modelu produkcyjnego i jego postać jako artefaktu, poparte liczbami
-z własnego W&B.
+### 3. Model działa tylko w procesie treningowym
 
-## Indywidualna odpowiedzialność
+Jeżeli model można wykorzystać wyłącznie bezpośrednio po `fit()`, nie jest jeszcze gotowym
+artefaktem.
 
-Owned items, np.: eksperymenty / tracking / pakiet i smoke / Model Card i ADR-2.
-Merytoryczne review, rotacyjny integrator, krótki checkpoint ustny.
+Musi dać się zapisać, zamknąć proces, ponownie wczytać i wykorzystać do predykcji.
 
-## Poziom wsparcia
+### 4. AutoGluon staje się celem samym w sobie
 
-Średni: PR referencyjny na starcie sprintu, ale projekt eksperymentów i kryteria wyboru
-należą do zespołu.
+AutoGluon jest narzędziem do eksperymentów.
 
-## Co musi być gotowe przed Sprintem 4
+Nie musicie wybierać go jako modelu produkcyjnego.
 
-Zielony smoke pakietu modelu. Dane dostępowe GCP (student credentials) przekazane zespołom —
-o ile pozwala na to wynik pre-flightu prowadzącej.
+---
 
-## Największe ryzyko
+## Najważniejszy rezultat Sprintu 3
 
-Ciężki sprint z jednym pełnym spotkaniem. Ograniczenie: AutoGluon sprawdzony już w Sprincie 2,
-limity czasu treningu, model sklearn dopuszczalny jako produkcyjny, kontrakt pakietu
-dostarczony z referencji.
+Po tym sprincie powinniście móc odpowiedzieć:
+
+> Który model wdrażamy, dlaczego właśnie ten i czy inna część systemu może go pobrać oraz
+> użyć bez ponownego treningu?
+
+Jeżeli odpowiedź brzmi „tak”, model jest gotowy do wykorzystania w API w Sprincie 4.
