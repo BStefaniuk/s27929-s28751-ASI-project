@@ -1,13 +1,15 @@
 # ASI — projekt zespołowy
 
-Repozytorium projektu zespołowego z przedmiotu „Architektury i systemy wdrożeń” (PJATK,
-semestr zimowy 2026/2027). W ciągu sześciu sprintów zespół buduje system ML od danych do
-aplikacji wdrożonej w Google Cloud: reprodukowalny pipeline, model jako artefakt, API, stan,
-UI, kontenery, wdrożenie i obserwowalność.
+W tym repozytorium pracujecie jako zespół nad kompletnym systemem ML. W ciągu sześciu sprintów
+rozwijacie jeden wspólny projekt: od danych i poprawnego eksperymentu, przez reprodukowalny
+pipeline i wybór modelu, aż po API, persistence, interfejs użytkownika, konteneryzację
+i wdrożenie w Google Cloud.
 
-Repozytorium od pierwszego dnia pokazuje docelową strukturę całego systemu (S1–S6), ale aktywny
-jest tylko **Sprint 1**. Elementy kolejnych sprintów to future scaffold — opis tego, co powstanie,
-a nie gotowe rozwiązanie (szczegóły: sekcja „Architektura i scaffold S1–S6”).
+Od pierwszego dnia widzicie docelową strukturę systemu na wszystkie sprinty (S1–S6), ale na
+starcie realizujecie wyłącznie **Sprint 1**. Elementy kolejnych sprintów są przygotowanym
+scaffoldem: pokazują, co będziecie później rozwijać i z jakimi częściami systemu będzie to
+powiązane, ale nie zawierają gotowych rozwiązań ani zadań do wykonania wcześniej
+(szczegóły: sekcja „Architektura i scaffold S1–S6”).
 
 <!-- KARTA-PROJEKTU:START -->
 ## Karta projektu (wypełnia zespół w Sprincie 1)
