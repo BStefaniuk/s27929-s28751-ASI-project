@@ -176,8 +176,8 @@ EXCLUDED FEATURES:
 - **Target:** `Churn`. **Klasa pozytywna:** `1` (klient odszedł).
 - **Moment predykcji:** predykcja na koniec 9. miesiąca na podstawie agregatów z miesięcy 1–9;
   etykieta opisuje stan klienta na koniec 12. miesiąca (3 miesiące odstępu planistycznego).
-- **Udział klasy pozytywnej:** NIEZWERYFIKOWANE w źródle pierwotnym — wypisze go skrypt
-  pobierania.
+- **Udział klasy pozytywnej:** ** 495 na 3 150 rekordów (15,71%). Źródło pierwotne nie podaje
+  tego rozkładu; wartość została zweryfikowana po pobraniu danych przez skrypt projektu.
 
 ALLOWED FEATURES:
 
