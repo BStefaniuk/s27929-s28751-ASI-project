@@ -30,13 +30,19 @@ def section(lines: list[str], heading: str) -> list[str]:
 
 
 def bullet_items(lines: list[str]) -> list[str]:
-    """Punkty listy ``- ...`` razem z liniami kontynuacji (wcięcie o dwie spacje)."""
+    """Punkty listy, również zapisane jako Markdown checklist."""
     items: list[str] = []
+
     for line in lines:
-        if line.startswith("- "):
+        if line.startswith("- [ ] "):
+            items.append(line[6:].strip())
+        elif line.startswith("- [x] ") or line.startswith("- [X] "):
+            items.append(line[6:].strip())
+        elif line.startswith("- "):
             items.append(line[2:].strip())
         elif line.startswith("  ") and line.strip() and items:
             items[-1] = f"{items[-1]} {line.strip()}"
+
     return items
 
 
