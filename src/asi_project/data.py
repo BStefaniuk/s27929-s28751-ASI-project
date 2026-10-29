@@ -191,6 +191,11 @@ def normalize_input(df: pd.DataFrame) -> pd.DataFrame:
     for column in normalized.columns:
         if is_text_column(normalized[column]):
             normalized[column] = normalized[column].map(_strip_text)
+    for column in ("job", "education", "contact", "poutcome"):
+        if column in normalized.columns:
+            normalized[column] = normalized[column].replace("unknown", np.nan)
+    if "pdays" in normalized.columns:
+        normalized["pdays"] = normalized["pdays"].replace(-1, np.nan)
     return normalized
 
 
