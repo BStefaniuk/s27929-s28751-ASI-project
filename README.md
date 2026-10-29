@@ -16,15 +16,15 @@ powiązane, ale nie zawierają gotowych rozwiązań ani zadań do wykonania wcze
 
 | Pole | Wartość |
 |---|---|
-| Zespół i integrator Sprintu 1 | TODO |
-| Dataset (id z `docs/datasets.md`) | TODO |
-| Źródło, licencja i cytowanie (DOI) | TODO |
-| Data pobrania danych | TODO |
-| SHA-256 pliku danych (`fingerprint.json`) | TODO |
-| Dane osobowe w zbiorze i sposób postępowania | TODO |
-| Target i klasa pozytywna | TODO |
-| Metryka główna i uzasadnienie | TODO |
-| Użytkownik systemu i decyzja, którą wspiera model | TODO |
+| Zespół i integrator Sprintu 1 | Gabriela Anioł, Bartosz Stefaniuk (integrator) |
+| Dataset (id z `docs/datasets.md`) | bank_marketing |
+| Źródło, licencja i cytowanie (DOI) | UCI Machine Learning Repository, https://archive.ics.uci.edu/dataset/222/bank+marketing, Licencja: CC BY 4.0, DOI https://doi.org/10.24432/C5K306 |
+| Data pobrania danych | 2026-10-15 |
+| SHA-256 pliku danych (`fingerprint.json`) | d1513ec63b385506f7cfce9f2c5caa9fe99e7ba4e8c3fa264b3aaf0f849ed32d |
+| Dane osobowe w zbiorze i sposób postępowania | Zbiór zawiera informacje o klientach, m.in. wiek i saldo, ale nie zawiera ich imion, nazwisk ani identyfikatora. Pełnych danych nie dodajemy do Gita. W demonstracji używamy danych fikcyjnych |
+| Target i klasa pozytywna | Target: y. Klasa pozytywna: yes (klient założył lokatę) |
+| Metryka główna i uzasadnienie | F1 dla klasy pozytywnej y = yes. Klasa yes stanowi 11,7% danych, F1 uwzględnia zarówno pominiętych zainteresowanych klientów, jak i zbędne telefony do osób niezainteresowanych. |
+| Użytkownik systemu i decyzja, którą wspiera model | Pracownik banku wybiera klientów, do których warto zadzwonić z ofertą lokaty |
 <!-- KARTA-PROJEKTU:END -->
 
 ## Mapa projektu
