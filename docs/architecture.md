@@ -48,11 +48,27 @@ gotowy — sprawdza to `python scripts/check_dod.py`.
 <!-- DIAGRAM-V0:START -->
 ```mermaid
 flowchart LR
-    data["TODO: źródło danych"] --> model["TODO: kolejne elementy systemu"]
-```
+    D["Bank Marketing: pełne dane lokalnie"] --> C["Kontrakt danych: datasets.yaml"]
+    C --> N["Normalizacja wejścia"]
+    N --> F["Filtrowanie danych treningowych"]
+    F --> T["Trening: notebook S1, Kedro od S2"]
+    T --> P["Preprocessing w sklearn Pipeline"]
+    P --> M["Model: LogisticRegression"]
+    M --> A["Zapisany model — planowane"]
 
-TODO: krótki opis diagramu (3–5 zdań).
+    U["Pracownik banku"] --> UI["Interfejs — planowany"]
+    UI --> API["API — planowane"]
+    API --> N2["Normalizacja pojedynczego rekordu"]
+    N2 --> W["Predykcja zapisanym modelem — planowana"]
+    A --> W
+    W --> R["Prawdopodobieństwo założenia lokaty"]
+    R --> API
+    API --> UI
+    API --> B["Historia predykcji — planowana"]
+```
 <!-- DIAGRAM-V0:END -->
+
+Dane Bank Marketing i kontrakt danych są już częścią projektu. Przed treningiem normalizujemy wartości wejściowe, filtrujemy rekordy treningowe, a imputacja, skalowanie i kodowanie odbywają się wewnątrz sklearn Pipeline. W sprincie nr. 1 uruchamiamy trening w notebooku, w kolejnych sprintach planujemy uporządkować go w Kedro i zapisywać model. Docelowo pracownik banku będzie wysyłał dane przez interfejs do API, które zwróci prawdopodobieństwo założenia lokaty i zapisze historię predykcji.
 
 ## Historia zmian architektury
 
