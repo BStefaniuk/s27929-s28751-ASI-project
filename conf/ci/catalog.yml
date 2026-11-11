@@ -1,0 +1,14 @@
+
+# Konfiguracja danych dla CI
+
+raw_data:
+  type: pandas.CSVDataset
+  filepath: data/01_raw/sample.csv
+  load_args:
+    sep: ","
+
+processed_data:
+  type: pandas.CSVDataset
+  filepath: data/02_intermediate/processed_ci.csv
+  save_args:
+    index: false

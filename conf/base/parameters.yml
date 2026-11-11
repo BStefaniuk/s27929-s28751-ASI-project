@@ -1,0 +1,5 @@
+
+# Parametry modelowania zgodne z project.yaml
+
+test_size: 0.2
+random_state: 42
