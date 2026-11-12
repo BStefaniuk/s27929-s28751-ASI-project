@@ -1,3 +1,4 @@
+known-first-party = ["asi_project"]
 [build-system]
 requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
@@ -32,3 +33,15 @@ select = ["E4", "E7", "E9", "F", "I", "B", "UP"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["asi_project"]
+
+
+[tool.kedro]
+package_name = "asi_project"
+project_name = "ASI Team Project"
+kedro_init_version = "1.7.0"
+source_dir = "src"
+tools = ""
+example_pipeline = "False"
+
+[tool.kedro_telemetry]
+project_id = "765b2c3b5e60425ca40f2e2663d86496"

@@ -1,0 +1,2 @@
+-r preflight-s2.txt
+kedro-datasets[pandas]==10.0.0

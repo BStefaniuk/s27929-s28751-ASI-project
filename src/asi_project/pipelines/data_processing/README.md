@@ -1,12 +1,40 @@
-# pipelines/data_processing
 
-> Scaffold for Sprint 2 — do not implement before this sprint.
+# Data Processing — Sprint 2
 
-Pliki, które powstaną w Sprincie 2: definicje nodów i definicja pipeline'u.
+Pipeline przygotowuje dane Bank Marketing do modelowania.
 
-Kontrakt:
+## Etapy
 
-- kolejność: walidacja kontraktu → input normalization → training-only filtering;
-- nody korzystają z istniejących funkcji `validate`, `normalize_input` i `filter_training_rows`
-  (`src/asi_project/data.py`) — bez kopiowania logiki;
-- wyjście: dane gotowe do splitu (warstwa `data/02_intermediate/`, poza gitem).
+1. **Walidacja** — sprawdzenie zgodności danych z kontraktem datasetu.
+2. **Normalizacja** — uporządkowanie wartości tekstowych i oznaczeń braków.
+3. **Filtrowanie** — usunięcie rekordów bez wartości targetu.
+
+Wykorzystujemy funkcje przygotowane w Sprincie 1 w `asi_project.data`.
+
+## Uruchomienie
+
+Pełny zbiór danych:
+
+```bash
+kedro run --pipelines data_processing
+```
+
+Próbka CI:
+
+```bash
+kedro run --env ci --pipelines data_processing
+```
+
+## Wynik
+
+Pipeline zapisuje przygotowane dane do `data/02_intermediate/processed_data.csv`.
+
+W trybie CI wynik jest zapisywany w `data/02_intermediate/processed_ci.csv`.
+
+## Testy
+
+```bash
+python -m pytest -q
+```
+
+Podczas lokalnego sprawdzenia wszystkie 47 testów zakończyły się sukcesem.

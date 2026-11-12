@@ -1,0 +1,17 @@
+raw_data:
+  type: pandas.CSVDataset
+  filepath: data/01_raw/bank_marketing/bank-full.csv
+  load_args:
+    sep: ";"
+
+validated_data:
+  type: MemoryDataset
+
+normalized_data:
+  type: MemoryDataset
+
+processed_data:
+  type: pandas.CSVDataset
+  filepath: data/02_intermediate/processed_data.csv
+  save_args:
+    index: false
