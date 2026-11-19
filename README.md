@@ -88,6 +88,51 @@ Najważniejsze pliki Sprintu 1:
 | `docs/architecture.md` | zespół | diagram v0 systemu docelowego |
 | `src/asi_project/datasets.yaml` | prowadząca | kontrakt datasetów — nie edytujemy |
 
+## Kedro quickstart — Sprint 2
+
+Polecenia wykonujemy w katalogu głównym sklonowanego repozytorium.
+
+Przygotowanie środowiska:
+
+```bash
+conda env update -n asi-ml -f environment.yml --prune
+conda activate asi-ml
+python -m pip install -r requirements/kedro-s2.txt -c constraints.txt
+python -m pip install --no-deps -e .
+```
+
+Pobranie pełnych danych i uruchomienie treningu:
+
+```bash
+python scripts/download_data.py
+kedro run
+```
+
+Pipeline wykonuje walidację, normalizację, filtrowanie, chronologiczny podział danych, trening DummyClassifier i LogisticRegression oraz ewaluację. Imputacja, skalowanie i kodowanie pozostają wewnątrz sklearn Pipeline.
+
+Wyniki pełnego uruchomienia:
+
+- modele: `data/06_models/dummy_model.pkl` i `logistic_model.pkl`;
+- metryki: `data/08_reporting/evaluation_metrics.json`;
+- przygotowane dane: `data/02_intermediate/processed_data.csv`.
+
+Tryb CI korzysta z próbki `data/01_raw/sample.csv` dostępnej w repozytorium:
+
+```bash
+kedro run --env ci
+python scripts/check_metrics.py data/08_reporting/evaluation_metrics_ci.json --data-mode sample
+```
+
+Wyniki trybu CI zapisują się w osobnych plikach z końcówką `_ci`. Pełne dane, wygenerowane modele i dane pośrednie pozostają poza Gitem.
+
+Testy:
+
+```bash
+python -m pytest -q
+```
+
+Podział odpowiedzialności za przetwarzanie opisuje [ADR-1](docs/adr/0001-gdzie-zyje-przetwarzanie.md).
+
 ## Gałęzie, Pull Requesty i review
 
 - Gałąź `main` jest chroniona. Każda zmiana trafia przez gałąź i Pull Request.

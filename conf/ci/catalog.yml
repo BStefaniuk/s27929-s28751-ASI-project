@@ -12,3 +12,15 @@ processed_data:
   filepath: data/02_intermediate/processed_ci.csv
   save_args:
     index: false
+
+dummy_model:
+  type: pickle.PickleDataset
+  filepath: data/06_models/dummy_model_ci.pkl
+
+logistic_model:
+  type: pickle.PickleDataset
+  filepath: data/06_models/logistic_model_ci.pkl
+
+evaluation_metrics:
+  type: json.JSONDataset
+  filepath: data/08_reporting/evaluation_metrics_ci.json
