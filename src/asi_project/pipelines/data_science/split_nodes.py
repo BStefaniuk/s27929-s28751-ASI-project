@@ -23,8 +23,10 @@ def prepare_xy(
 def prepare_train_test(
     X: pd.DataFrame,
     y: pd.Series,
+    test_size: float = 0.2,
+    random_state: int = 42,
 ) -> tuple[pd.DataFrame, pd.DataFrame, pd.Series, pd.Series]:
-    """Dzieli dane na zbiór treningowy i testowy."""
+    """Dzieli dane zgodnie z kontraktem i parametrami Kedro."""
     config = load_project_config()
     contract = get_contract(config)
 
@@ -32,6 +34,6 @@ def prepare_train_test(
         X,
         y,
         contract,
-        test_size=config.test_size,
-        random_state=config.random_state,
+        test_size=test_size,
+        random_state=random_state,
     )

@@ -51,6 +51,12 @@ jobs:
       - name: pytest
         run: pytest
 
+      - name: Pipeline Kedro na próbce CI
+        run: kedro run --env ci
+
+      - name: Sprawdzenie metryk Kedro
+        run: python scripts/check_metrics.py data/08_reporting/evaluation_metrics_ci.json --data-mode sample
+
       - name: Stan projektu
         id: status
         run: python scripts/project_status.py | tee -a "$GITHUB_OUTPUT"
